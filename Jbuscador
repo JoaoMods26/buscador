@@ -1,0 +1,388 @@
+--  Servicios necesarios
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local Player = Players.LocalPlayer
+
+-- compatibilidad
+local request = (http and http.request) or (syn and syn.request) or (fluxus and fluxus.request)
+local writefile, readfile, isfile = writefile, readfile, isfile
+
+if not request then
+	warn("❌ Tu exploit no soporta request HTTP.")
+	return
+end
+
+-- histo
+local historyFile = "scriptblox_history.json"
+local history = {}
+
+if isfile and isfile(historyFile) then
+	local data = readfile(historyFile)
+	if data then
+		local success, decoded = pcall(function() return HttpService:JSONDecode(data) end)
+		if success and decoded then
+			history = decoded
+		end
+	end
+end
+
+local function saveHistory()
+	if writefile then
+		writefile(historyFile, HttpService:JSONEncode(history))
+	end
+end
+
+-- Principal
+local ScreenGui = Instance.new("ScreenGui", Player:WaitForChild("PlayerGui"))
+ScreenGui.Name = "ScriptBloxInterface"
+ScreenGui.ResetOnSpawn = false
+
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.Size = UDim2.new(0, 520, 0, 430)
+MainFrame.Position = UDim2.new(0.5, -260, 0.5, -215)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.Active = true
+MainFrame.Draggable = true
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
+
+
+
+local gradient = Instance.new("UIGradient", MainFrame)
+gradient.Color = ColorSequence.new{
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 120, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 60, 90))
+}
+gradient.Rotation = 45
+
+-- T
+local Title = Instance.new("TextLabel", MainFrame)
+Title.Size = UDim2.new(1, -20, 0, 40)
+Title.Position = UDim2.new(0, 10, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "🔍 Script - Jmods"
+Title.Font = Enum.Font.FredokaOne
+Title.TextSize = 26
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextXAlignment = Enum.TextXAlignment.Left
+
+
+local MinBtn = Instance.new("TextButton", MainFrame)
+MinBtn.Size = UDim2.new(0, 30, 0, 30)
+MinBtn.Position = UDim2.new(1, -70, 0, 5)
+MinBtn.Text = "-"
+MinBtn.Font = Enum.Font.GothamBlack
+MinBtn.TextSize = 20
+MinBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+MinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
+
+-- ❌ Cerrar
+local CloseBtn = Instance.new("TextButton", MainFrame)
+CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position = UDim2.new(1, -35, 0, 5)
+CloseBtn.Text = "X"
+CloseBtn.Font = Enum.Font.GothamBlack
+CloseBtn.TextSize = 20
+CloseBtn.BackgroundColor3 = Color3.fromRGB(170, 50, 50)
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
+
+
+local ConfigBtn = Instance.new("TextButton", MainFrame)
+ConfigBtn.Size = UDim2.new(0, 30, 0, 30)
+ConfigBtn.Position = UDim2.new(1, -105, 0, 5)
+ConfigBtn.Text = "⚙️"
+ConfigBtn.Font = Enum.Font.GothamBold
+ConfigBtn.TextSize = 18
+ConfigBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+ConfigBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+Instance.new("UICorner", ConfigBtn).CornerRadius = UDim.new(0, 6)
+
+
+local SearchBox = Instance.new("TextBox", MainFrame)
+SearchBox.Size = UDim2.new(0.7, -10, 0, 32)
+SearchBox.Position = UDim2.new(0, 10, 0, 50)
+SearchBox.PlaceholderText = "Buscar script..."
+SearchBox.Text = ""
+SearchBox.Font = Enum.Font.Gotham
+SearchBox.TextSize = 18
+SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+SearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+Instance.new("UICorner", SearchBox).CornerRadius = UDim.new(0, 6)
+
+-- 🔘 Botón Buscar
+local SearchButton = Instance.new("TextButton", MainFrame)
+SearchButton.Size = UDim2.new(0.3, -10, 0, 32)
+SearchButton.Position = UDim2.new(0.7, 0, 0, 50)
+SearchButton.Text = "Buscar"
+SearchButton.Font = Enum.Font.GothamBold
+SearchButton.TextSize = 18
+SearchButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+SearchButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+Instance.new("UICorner", SearchButton).CornerRadius = UDim.new(0, 6)
+
+
+local ResultsFrame = Instance.new("ScrollingFrame", MainFrame)
+ResultsFrame.Position = UDim2.new(0, 10, 0, 90)
+ResultsFrame.Size = UDim2.new(1, -20, 1, -100)
+ResultsFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ResultsFrame.BackgroundTransparency = 0.3
+ResultsFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+ResultsFrame.BorderSizePixel = 0
+ResultsFrame.ScrollBarThickness = 6
+
+local UIListLayout = Instance.new("UIListLayout", ResultsFrame)
+UIListLayout.Padding = UDim.new(0, 6)
+
+
+local ConfigFrame = Instance.new("Frame", MainFrame)
+ConfigFrame.Size = UDim2.new(1, -20, 0, 120)
+ConfigFrame.Position = UDim2.new(0, 10, 1, -130)
+ConfigFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+ConfigFrame.Visible = false
+Instance.new("UICorner", ConfigFrame).CornerRadius = UDim.new(0, 8)
+
+local configLabel = Instance.new("TextLabel", ConfigFrame)
+configLabel.Size = UDim2.new(1, 0, 0, 24)
+configLabel.Position = UDim2.new(0, 0, 0, 0)
+configLabel.Text = "Cambia tus cosas"
+configLabel.Font = Enum.Font.GothamBold
+configLabel.TextSize = 16
+configLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+configLabel.BackgroundTransparency = 1
+
+
+local bgInput = Instance.new("TextBox", ConfigFrame)
+bgInput.Size = UDim2.new(1, -20, 0, 24)
+bgInput.Position = UDim2.new(0, 10, 0, 30)
+bgInput.PlaceholderText = "ID de imagen de fondo (ej: 123456789)"
+bgInput.Font = Enum.Font.Gotham
+bgInput.TextSize = 14
+bgInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+bgInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+Instance.new("UICorner", bgInput).CornerRadius = UDim.new(0, 5)
+
+
+local transparencyInput = Instance.new("TextBox", ConfigFrame)
+transparencyInput.Size = UDim2.new(1, -20, 0, 24)
+transparencyInput.Position = UDim2.new(0, 10, 0, 60)
+transparencyInput.PlaceholderText = "Transparencia (0 a 1, ej: 0.3)"
+transparencyInput.Font = Enum.Font.Gotham
+transparencyInput.TextSize = 14
+transparencyInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+transparencyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+Instance.new("UICorner", transparencyInput).CornerRadius = UDim.new(0, 5)
+
+
+local backgroundImage = Instance.new("ImageLabel", MainFrame)
+backgroundImage.Size = UDim2.new(1, 0, 1, 0)
+backgroundImage.Position = UDim2.new(0, 0, 0, 0)
+backgroundImage.ZIndex = -10
+backgroundImage.BackgroundTransparency = 1
+backgroundImage.ImageTransparency = 0.85
+backgroundImage.Visible = false
+
+
+ConfigBtn.MouseButton1Click:Connect(function()
+	ConfigFrame.Visible = not ConfigFrame.Visible
+end)
+
+bgInput.FocusLost:Connect(function()
+	local id = tonumber(bgInput.Text)
+	if id then
+		backgroundImage.Image = "rbxassetid://" .. id
+		backgroundImage.Visible = true
+	end
+end)
+
+transparencyInput.FocusLost:Connect(function()
+	local val = tonumber(transparencyInput.Text)
+	if val and val >= 0 and val <= 1 then
+		MainFrame.BackgroundTransparency = val
+	end
+end)
+
+
+
+local function fetchRawScript(url)
+	local response = request({
+		Url = url,
+		Method = "GET",
+		Headers = {["Content-Type"] = "application/json"}
+	})
+	if response and response.Body then
+		local success, data = pcall(function() return HttpService:JSONDecode(response.Body) end)
+		if success then return data else return response.Body end
+	end
+	return nil
+end
+
+-- (historial o resultados)
+local function showScripts(scripts, isHistory)
+	for _, child in ipairs(ResultsFrame:GetChildren()) do
+		if child:IsA("Frame") then child:Destroy() end
+	end
+
+	for _, script in ipairs(scripts) do
+		local Item = Instance.new("Frame", ResultsFrame)
+		Item.Size = UDim2.new(1, -10, 0, 80)
+		Item.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+		Item.BackgroundTransparency = 0.2
+		Instance.new("UICorner", Item).CornerRadius = UDim.new(0, 8)
+
+		local nameLabel = Instance.new("TextLabel", Item)
+		nameLabel.Text = "📜 " .. script.title
+		nameLabel.Size = UDim2.new(1, isHistory and -50 or -20, 0, 26)
+		nameLabel.Position = UDim2.new(0, 10, 0, 6)
+		nameLabel.TextSize = 16
+		nameLabel.Font = Enum.Font.GothamMedium
+		nameLabel.TextColor3 = Color3.new(1, 1, 1)
+		nameLabel.BackgroundTransparency = 1
+		nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+		if isHistory then
+			local deleteBtn = Instance.new("TextButton", Item)
+			deleteBtn.Size = UDim2.new(0, 30, 0, 30)
+			deleteBtn.Position = UDim2.new(1, -40, 0, 6)
+			deleteBtn.Text = "X"
+			deleteBtn.Font = Enum.Font.GothamBold
+			deleteBtn.TextSize = 16
+			deleteBtn.BackgroundColor3 = Color3.fromRGB(150, 60, 60)
+			deleteBtn.TextColor3 = Color3.new(1, 1, 1)
+			Instance.new("UICorner", deleteBtn).CornerRadius = UDim.new(0, 5)
+
+			deleteBtn.MouseButton1Click:Connect(function()
+				for i, s in ipairs(history) do
+					if s.slug == script.slug then
+						table.remove(history, i)
+						break
+					end
+				end
+				saveHistory()
+				showScripts(history, true)
+			end)
+		end
+
+		local gameLabel = Instance.new("TextLabel", Item)
+		gameLabel.Text = "🎮 " .. (script.game and script.game.name or "Universal")
+		gameLabel.Size = UDim2.new(1, -20, 0, 20)
+		gameLabel.Position = UDim2.new(0, 10, 0, 34)
+		gameLabel.TextSize = 14
+		gameLabel.Font = Enum.Font.Gotham
+		gameLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+		gameLabel.BackgroundTransparency = 1
+		gameLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+		local executeBtn = Instance.new("TextButton", Item)
+		executeBtn.Size = UDim2.new(0, 100, 0, 25)
+		executeBtn.Position = UDim2.new(1, -210, 1, -28)
+		executeBtn.Text = "Ejecutar"
+		executeBtn.Font = Enum.Font.Gotham
+		executeBtn.TextSize = 14
+		executeBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 180)
+		executeBtn.TextColor3 = Color3.new(1, 1, 1)
+		Instance.new("UICorner", executeBtn).CornerRadius = UDim.new(0, 5)
+
+		local copyBtn = Instance.new("TextButton", Item)
+		copyBtn.Size = UDim2.new(0, 100, 0, 25)
+		copyBtn.Position = UDim2.new(1, -105, 1, -28)
+		copyBtn.Text = "Copiar"
+		copyBtn.Font = Enum.Font.Gotham
+		copyBtn.TextSize = 14
+		copyBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+		copyBtn.TextColor3 = Color3.new(1, 1, 1)
+		Instance.new("UICorner", copyBtn).CornerRadius = UDim.new(0, 5)
+
+		executeBtn.MouseButton1Click:Connect(function()
+			local raw = fetchRawScript("https://scriptblox.com/api/script/raw/" .. script.slug)
+			if raw then
+				local code = (type(raw) == "table" and raw.result) or raw
+				local func, err = loadstring and loadstring(code) or load(code)
+				if func then
+					pcall(func)
+					local exists = false
+					for _, s in pairs(history) do
+						if s.slug == script.slug then exists = true break end
+					end
+					if not exists then
+						table.insert(history, 1, {title = script.title, slug = script.slug, game = script.game})
+						saveHistory()
+					end
+				else
+					warn("❌ Error al compilar:", err)
+				end
+			end
+		end)
+
+		copyBtn.MouseButton1Click:Connect(function()
+			local raw = fetchRawScript("https://scriptblox.com/api/script/raw/" .. script.slug)
+			local code = (type(raw) == "table" and raw.result) or raw
+			if code and setclipboard then
+				setclipboard(code)
+			end
+		end)
+	end
+
+	ResultsFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y + 10)
+end
+
+
+local function searchScripts(query)
+	if query == "" or not query then
+		showScripts(history, true)
+	else
+		for _, c in ipairs(ResultsFrame:GetChildren()) do
+			if c:IsA("Frame") or c:IsA("TextLabel") then c:Destroy() end
+		end
+
+		local loading = Instance.new("TextLabel", ResultsFrame)
+		loading.Size = UDim2.new(1, 0, 0, 40)
+		loading.Text = "🔄 Buscando scripts..."
+		loading.TextColor3 = Color3.new(1, 1, 1)
+		loading.BackgroundTransparency = 1
+
+		task.spawn(function()
+			local data = fetchRawScript("https://scriptblox.com/api/script/search?q=" .. HttpService:UrlEncode(query))
+			loading:Destroy()
+
+			if data and data.result and data.result.scripts then
+				showScripts(data.result.scripts, false)
+			else
+				local fail = Instance.new("TextLabel", ResultsFrame)
+				fail.Size = UDim2.new(1, 0, 0, 40)
+				fail.Text = "❌ No se encontraron resultados."
+				fail.TextColor3 = Color3.new(1, 1, 1)
+				fail.BackgroundTransparency = 1
+			end
+		end)
+	end
+end
+
+
+SearchButton.MouseButton1Click:Connect(function()
+	searchScripts(SearchBox.Text)
+end)
+
+SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+	if SearchBox.Text == "" then
+		showScripts(history, true)
+	end
+end)
+
+local minimized = false
+MinBtn.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	SearchBox.Visible = not minimized
+	SearchButton.Visible = not minimized
+	ResultsFrame.Visible = not minimized
+	ConfigBtn.Visible = not minimized
+	MinBtn.Text = minimized and "+" or "-"
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+	ScreenGui:Destroy()
+end)
+
+
+showScripts(history, true)
+
