@@ -1,18 +1,20 @@
---  Servicios necesarios
+-- Servicios
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
 
--- compatibilidad
+-- 
 local request = (http and http.request) or (syn and syn.request) or (fluxus and fluxus.request)
-local writefile, readfile, isfile = writefile, readfile, isfile
-
 if not request then
 	warn("❌ Tu exploit no soporta request HTTP.")
 	return
 end
 
--- histo
+--
+local FIREBASE_BASE_URL = "https://scriptbloxxd-default-rtdb.firebaseio.com/scripts/"
+
+-- 
+local writefile, readfile, isfile = writefile, readfile, isfile
 local historyFile = "scriptblox_history.json"
 local history = {}
 
@@ -32,18 +34,118 @@ local function saveHistory()
 	end
 end
 
+--
+
+local function saveToFirebase(query, scripts)
+	local url = FIREBASE_BASE_URL .. HttpService:UrlEncode(query) .. ".json"
+	local response = request({
+		Url = url,
+		Method = "PUT",
+		Headers = {["Content-Type"] = "application/json"},
+		Body = HttpService:JSONEncode(scripts)
+	})
+	return response and response.StatusCode == 200
+end
+
+local function loadFromFirebase(query)
+	local url = FIREBASE_BASE_URL .. HttpService:UrlEncode(query) .. ".json"
+	local response = request({
+		Url = url,
+		Method = "GET"
+	})
+	if response and response.Body then
+		local success, data = pcall(function()
+			return HttpService:JSONDecode(response.Body)
+		end)
+		if success then return data end
+	end
+	return nil
+end
+
+local function apiDisponible()
+	local checkUrl = "https://scriptblox.com/api/script/search?q=test"
+	local response = request({
+		Url = checkUrl,
+		Method = "GET"
+	})
+	return response and response.StatusCode == 200
+end
+
+
 -- Principal
 local ScreenGui = Instance.new("ScreenGui", Player:WaitForChild("PlayerGui"))
 ScreenGui.Name = "ScriptBloxInterface"
 ScreenGui.ResetOnSpawn = false
 
+
+-- Función para hacer frames draggeables en PC y móvil
+local function makeDraggable(frame, dragHandle)
+	local dragging = false
+	local dragInput, mousePos, framePos
+
+	local function update(input)
+		local delta = input.Position - mousePos
+		frame.Position = UDim2.new(
+			framePos.X.Scale, framePos.X.Offset + delta.X,
+			framePos.Y.Scale, framePos.Y.Offset + delta.Y
+		)
+	end
+
+	dragHandle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			mousePos = input.Position
+			framePos = frame.Position
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	dragHandle.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			update(input)
+		end
+	end)
+end
+
+
+
 local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.Size = UDim2.new(0, 520, 0, 430)
 MainFrame.Position = UDim2.new(0.5, -260, 0.5, -215)
 MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+
+
+
+local UserInputService = game:GetService("UserInputService")
+
+if UserInputService.TouchEnabled then
+	-- En móvil
+	MainFrame.Size = UDim2.new(0.45, 0, 0.85, 0)
+	MainFrame.Position = UDim2.new(0.275, 0, 0.075, 0)
+else
+	-- PC
+	MainFrame.Size = UDim2.new(0, 520, 0, 430)
+	MainFrame.Position = UDim2.new(0.5, -260, 0.5, -215)
+end
+
+
+
+
+
+
+
+
 MainFrame.Active = true
-MainFrame.Draggable = true
+---MainFrame.Draggable = true
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
+
+
+
+
 
 
 
@@ -54,16 +156,31 @@ gradient.Color = ColorSequence.new{
 }
 gradient.Rotation = 45
 
--- T
 local Title = Instance.new("TextLabel", MainFrame)
 Title.Size = UDim2.new(1, -20, 0, 40)
 Title.Position = UDim2.new(0, 10, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🔍 Script - Jmods"
+Title.Text = "🔍 Scripts - Jmods"
 Title.Font = Enum.Font.FredokaOne
 Title.TextSize = 26
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextXAlignment = Enum.TextXAlignment.Left
+makeDraggable(MainFrame, Title)
+
+
+
+local Logo = Instance.new("ImageLabel", MainFrame)
+Logo.Size = UDim2.new(0, 50, 0, 50)
+Logo.Position = UDim2.new(0, 200, 0, -7)
+Logo.BackgroundTransparency = 1
+Logo.Image = "rbxassetid://128308831323216"
+Logo.ScaleType = Enum.ScaleType.Fit
+Logo.ZIndex = Title.ZIndex + 1
+
+
+
+
+
 
 
 local MinBtn = Instance.new("TextButton", MainFrame)
@@ -76,7 +193,7 @@ MinBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 MinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
 
--- ❌ Cerrar
+--  Cerrar
 local CloseBtn = Instance.new("TextButton", MainFrame)
 CloseBtn.Size = UDim2.new(0, 30, 0, 30)
 CloseBtn.Position = UDim2.new(1, -35, 0, 5)
@@ -87,7 +204,6 @@ CloseBtn.BackgroundColor3 = Color3.fromRGB(170, 50, 50)
 CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
 
-
 local ConfigBtn = Instance.new("TextButton", MainFrame)
 ConfigBtn.Size = UDim2.new(0, 30, 0, 30)
 ConfigBtn.Position = UDim2.new(1, -105, 0, 5)
@@ -97,7 +213,6 @@ ConfigBtn.TextSize = 18
 ConfigBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 ConfigBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 Instance.new("UICorner", ConfigBtn).CornerRadius = UDim.new(0, 6)
-
 
 local SearchBox = Instance.new("TextBox", MainFrame)
 SearchBox.Size = UDim2.new(0.7, -10, 0, 32)
@@ -110,7 +225,6 @@ SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 SearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 Instance.new("UICorner", SearchBox).CornerRadius = UDim.new(0, 6)
 
--- 🔘 Botón Buscar
 local SearchButton = Instance.new("TextButton", MainFrame)
 SearchButton.Size = UDim2.new(0.3, -10, 0, 32)
 SearchButton.Position = UDim2.new(0.7, 0, 0, 50)
@@ -120,7 +234,6 @@ SearchButton.TextSize = 18
 SearchButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 SearchButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 Instance.new("UICorner", SearchButton).CornerRadius = UDim.new(0, 6)
-
 
 local ResultsFrame = Instance.new("ScrollingFrame", MainFrame)
 ResultsFrame.Position = UDim2.new(0, 10, 0, 90)
@@ -204,6 +317,8 @@ end)
 
 
 
+
+--scripts ScriptBlox
 local function fetchRawScript(url)
 	local response = request({
 		Url = url,
@@ -217,7 +332,35 @@ local function fetchRawScript(url)
 	return nil
 end
 
--- (historial o resultados)
+
+--Traductor
+local function traducirATextoIngles(texto)
+	local response = request({
+		Url = "https://libretranslate.com/translate",
+		Method = "POST",
+		Headers = {
+			["Content-Type"] = "application/x-www-form-urlencoded"
+		},
+		Body = "q=" .. HttpService:UrlEncode(texto) ..
+			   "&source=auto&target=en&format=text"
+	})
+
+	if response and response.Body then
+		local success, decoded = pcall(function()
+			return HttpService:JSONDecode(response.Body)
+		end)
+		if success and decoded and decoded.translatedText then
+			return decoded.translatedText
+		end
+	end
+
+	return texto -- Si falla, busca lo que escribió el usuario
+end
+
+
+
+
+
 local function showScripts(scripts, isHistory)
 	for _, child in ipairs(ResultsFrame:GetChildren()) do
 		if child:IsA("Frame") then child:Destroy() end
@@ -231,7 +374,7 @@ local function showScripts(scripts, isHistory)
 		Instance.new("UICorner", Item).CornerRadius = UDim.new(0, 8)
 
 		local nameLabel = Instance.new("TextLabel", Item)
-		nameLabel.Text = "📜 " .. script.title
+		nameLabel.Text = "🎮 " .. script.title
 		nameLabel.Size = UDim2.new(1, isHistory and -50 or -20, 0, 26)
 		nameLabel.Position = UDim2.new(0, 10, 0, 6)
 		nameLabel.TextSize = 16
@@ -264,7 +407,39 @@ local function showScripts(scripts, isHistory)
 		end
 
 		local gameLabel = Instance.new("TextLabel", Item)
-		gameLabel.Text = "🎮 " .. (script.game and script.game.name or "Universal")
+		gameLabel.Text = "📜 " .. (script.game and script.game.name or "Universal")gameLabel.Text = "📜 " .. (script.game and script.game.name or "Universal")
+
+
+
+
+
+local keyLabel = Instance.new("TextLabel", Item)
+keyLabel.Size = UDim2.new(0, 120, 0, 20)
+keyLabel.Position = UDim2.new(1, -130, 0, 34)
+keyLabel.BackgroundTransparency = 1
+keyLabel.TextXAlignment = Enum.TextXAlignment.Right
+keyLabel.Font = Enum.Font.Gotham
+keyLabel.TextSize = 14
+keyLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+
+if script.key == true then
+	keyLabel.Text = "🔐 Requiere key"
+	keyLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
+elseif script.key == false or script.key == nil then
+	keyLabel.Text = "🔓 Sin key"
+	keyLabel.TextColor3 = Color3.fromRGB(120, 255, 120)
+end
+
+keyLabel.Parent = Item
+
+
+
+
+
+
+
+
+
 		gameLabel.Size = UDim2.new(1, -20, 0, 20)
 		gameLabel.Position = UDim2.new(0, 10, 0, 34)
 		gameLabel.TextSize = 14
@@ -326,41 +501,64 @@ local function showScripts(scripts, isHistory)
 	ResultsFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y + 10)
 end
 
-
+-- buscar scripts
 local function searchScripts(query)
 	if query == "" or not query then
 		showScripts(history, true)
-	else
-		for _, c in ipairs(ResultsFrame:GetChildren()) do
-			if c:IsA("Frame") or c:IsA("TextLabel") then c:Destroy() end
+		return
+	end
+
+	for _, c in ipairs(ResultsFrame:GetChildren()) do
+		if c:IsA("Frame") or c:IsA("TextLabel") then
+			c:Destroy()
 		end
+	end
 
-		local loading = Instance.new("TextLabel", ResultsFrame)
-		loading.Size = UDim2.new(1, 0, 0, 40)
-		loading.Text = "🔄 Buscando scripts..."
-		loading.TextColor3 = Color3.new(1, 1, 1)
-		loading.BackgroundTransparency = 1
+	local loading = Instance.new("TextLabel", ResultsFrame)
+	loading.Size = UDim2.new(1, 0, 0, 40)
+	loading.Text = "🔄buscando por favor espera..."
+	loading.TextColor3 = Color3.new(1, 1, 1)
+	loading.BackgroundTransparency = 1
 
-		task.spawn(function()
-			local data = fetchRawScript("https://scriptblox.com/api/script/search?q=" .. HttpService:UrlEncode(query))
-			loading:Destroy()
+	task.wait(0.05)
 
-			if data and data.result and data.result.scripts then
-				showScripts(data.result.scripts, false)
+	task.spawn(function()
+		local translatedQuery = traducirATextoIngles(query) --Traducción 
+
+		local url = "https://scriptblox.com/api/script/search?q=" .. HttpService:UrlEncode(translatedQuery)
+		local data = fetchRawScript(url)
+		loading:Destroy()
+
+		if data and data.result and data.result.scripts then
+			showScripts(data.result.scripts, false)
+			saveToFirebase(query, data.result.scripts) -- Guardamos usando lo original escrito
+		else
+			local fallback = loadFromFirebase(query)
+			if fallback then
+				showScripts(fallback, false)
 			else
 				local fail = Instance.new("TextLabel", ResultsFrame)
 				fail.Size = UDim2.new(1, 0, 0, 40)
-				fail.Text = "❌ No se encontraron resultados."
+				fail.Text = "❌ Sin resultados ni respaldo local."
 				fail.TextColor3 = Color3.new(1, 1, 1)
 				fail.BackgroundTransparency = 1
 			end
-		end)
-	end
+		end
+	end)
 end
 
 
+
+
+-- 🔘 Conectar botones
 SearchButton.MouseButton1Click:Connect(function()
 	searchScripts(SearchBox.Text)
+end)
+
+SearchBox.FocusLost:Connect(function(enterPressed)
+	if enterPressed then
+		searchScripts(SearchBox.Text)
+	end
 end)
 
 SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
@@ -370,19 +568,50 @@ SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
 end)
 
 local minimized = false
+local restoreButton -- botón que aparecerá cuando está minimizado
+
 MinBtn.MouseButton1Click:Connect(function()
 	minimized = not minimized
-	SearchBox.Visible = not minimized
-	SearchButton.Visible = not minimized
-	ResultsFrame.Visible = not minimized
-	ConfigBtn.Visible = not minimized
-	MinBtn.Text = minimized and "+" or "-"
+
+	if minimized then
+		MainFrame.Visible = false
+
+		restoreButton = Instance.new("TextButton")
+		restoreButton.Name = "RestoreBtn"
+		restoreButton.Text = "Jmods🔍"
+		restoreButton.Size = UDim2.new(0, 120, 0, 35)
+		restoreButton.Position = UDim2.new(0, 20, 0, 20)
+		restoreButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		restoreButton.TextColor3 = Color3.new(1, 1, 1)
+		restoreButton.Font = Enum.Font.GothamBold
+		restoreButton.TextSize = 16
+		restoreButton.Parent = ScreenGui
+		Instance.new("UICorner", restoreButton).CornerRadius = UDim.new(0, 8)
+
+		makeDraggable(restoreButton, restoreButton)
+
+		restoreButton.MouseButton1Click:Connect(function()
+			minimized = false
+			MainFrame.Visible = true
+			if restoreButton then
+				restoreButton:Destroy()
+				restoreButton = nil
+			end
+		end)
+	else
+		MainFrame.Visible = true
+		if restoreButton then
+			restoreButton:Destroy()
+			restoreButton = nil
+		end
+	end
 end)
+
 
 CloseBtn.MouseButton1Click:Connect(function()
 	ScreenGui:Destroy()
 end)
 
 
+-- Mostrar historial al inicio
 showScripts(history, true)
-
