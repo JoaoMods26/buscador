@@ -214,6 +214,191 @@ ConfigBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 ConfigBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 Instance.new("UICorner", ConfigBtn).CornerRadius = UDim.new(0, 6)
 
+
+
+
+
+
+-- 🔘 Botón de recientes
+local RecentsBtn = Instance.new("TextButton", MainFrame)
+RecentsBtn.Size = UDim2.new(0, 30, 0, 30)
+RecentsBtn.Position = UDim2.new(1, -140, 0, 5) -- A la izquierda de Config
+RecentsBtn.Text = "🕑"
+RecentsBtn.Font = Enum.Font.GothamBold
+RecentsBtn.TextSize = 18
+RecentsBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+RecentsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+Instance.new("UICorner", RecentsBtn).CornerRadius = UDim.new(0, 6)
+
+-- 🔳 Frame de recientes (encima)
+local RecentsFrame = Instance.new("Frame", MainFrame)
+RecentsFrame.Size = UDim2.new(1, -20, 1, -100)
+RecentsFrame.Position = UDim2.new(0, 10, 0, 90)
+RecentsFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+RecentsFrame.BackgroundTransparency = 0.2
+RecentsFrame.Visible = false
+RecentsFrame.ZIndex = 5
+Instance.new("UICorner", RecentsFrame).CornerRadius = UDim.new(0, 8)
+
+
+
+-- Scroll
+local RecentsScroll = Instance.new("ScrollingFrame", RecentsFrame)
+RecentsScroll.Size = UDim2.new(1, 0, 1, 0)
+RecentsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+RecentsScroll.ScrollBarThickness = 6
+RecentsScroll.BackgroundTransparency = 1
+RecentsScroll.ZIndex = 6
+
+
+
+local RecentsLayout = Instance.new("UIListLayout", RecentsScroll)
+RecentsLayout.Padding = UDim.new(0, 6)
+
+-- 🔥 Mostrar scripts recientes de ScriptBlox
+local function showRecentsFromScriptBlox()
+	for _, child in ipairs(RecentsScroll:GetChildren()) do
+		if child:IsA("Frame") then child:Destroy() end
+	end
+
+	local url = "https://scriptblox.com/api/script/trending"
+	local response = request({
+		Url = url,
+		Method = "GET",
+		Headers = {["Content-Type"] = "application/json"}
+	})
+
+	if response and response.Body then
+		local success, data = pcall(function()
+			return HttpService:JSONDecode(response.Body)
+		end)
+
+		if success and data and data.result and data.result.scripts then
+			local scripts = data.result.scripts
+
+			-- Mostrar máximo 5
+			for i = 1, math.min(40, #scripts) do
+				local script = scripts[i]
+
+				local Item = Instance.new("Frame", RecentsScroll)
+				Item.Size = UDim2.new(1, -10, 0, 80)
+				Item.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+				Item.BackgroundTransparency = 0.2
+				Item.ZIndex = 6
+				Instance.new("UICorner", Item).CornerRadius = UDim.new(0, 8)
+
+				local nameLabel = Instance.new("TextLabel", Item)
+				nameLabel.Text = "🎮 " .. script.title
+				nameLabel.Size = UDim2.new(1, -20, 0, 26)
+				nameLabel.Position = UDim2.new(0, 10, 0, 6)
+				nameLabel.Font = Enum.Font.GothamMedium
+				nameLabel.TextSize = 16
+				nameLabel.TextColor3 = Color3.new(1, 1, 1)
+				nameLabel.BackgroundTransparency = 1
+				nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+				nameLabel.ZIndex = 7
+
+				local gameLabel = Instance.new("TextLabel", Item)
+				gameLabel.Text = "📜 " .. (script.game and script.game.name or "Universal")
+				gameLabel.Size = UDim2.new(1, -20, 0, 20)
+				gameLabel.Position = UDim2.new(0, 10, 0, 34)
+				gameLabel.Font = Enum.Font.Gotham
+				gameLabel.TextSize = 14
+				gameLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+				gameLabel.BackgroundTransparency = 1
+				gameLabel.TextXAlignment = Enum.TextXAlignment.Left
+				gameLabel.ZIndex = 7
+
+
+
+local viewsLabel = Instance.new("TextLabel", Item)
+viewsLabel.Text = "👁️ " .. tostring(script.views or 0) .. " Ejecuciones/vistas"
+viewsLabel.Size = UDim2.new(1, -20, 0, 20)
+viewsLabel.Position = UDim2.new(0, 10, 0, 54)
+viewsLabel.Font = Enum.Font.Gotham
+viewsLabel.TextSize = 14
+viewsLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+viewsLabel.BackgroundTransparency = 1
+viewsLabel.TextXAlignment = Enum.TextXAlignment.Left
+viewsLabel.ZIndex = 7
+
+
+
+
+
+
+
+
+				local executeBtn = Instance.new("TextButton", Item)
+				executeBtn.Size = UDim2.new(0, 100, 0, 25)
+				executeBtn.Position = UDim2.new(1, -210, 1, -28)
+				executeBtn.Text = "Ejecutar"
+				executeBtn.Font = Enum.Font.Gotham
+				executeBtn.TextSize = 14
+				executeBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 180)
+				executeBtn.TextColor3 = Color3.new(1, 1, 1)
+				executeBtn.ZIndex = 7
+				Instance.new("UICorner", executeBtn).CornerRadius = UDim.new(0, 5)
+
+				local copyBtn = Instance.new("TextButton", Item)
+				copyBtn.Size = UDim2.new(0, 100, 0, 25)
+				copyBtn.Position = UDim2.new(1, -105, 1, -28)
+				copyBtn.Text = "Copiar"
+				copyBtn.Font = Enum.Font.Gotham
+				copyBtn.TextSize = 14
+				copyBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+				copyBtn.TextColor3 = Color3.new(1, 1, 1)
+				copyBtn.ZIndex = 7
+				Instance.new("UICorner", copyBtn).CornerRadius = UDim.new(0, 5)
+
+				-- Ejecutar
+				executeBtn.MouseButton1Click:Connect(function()
+					local raw = fetchRawScript("https://scriptblox.com/api/script/raw/" .. script.slug)
+					if raw then
+						local code = (type(raw) == "table" and raw.result) or raw
+						local func, err = loadstring and loadstring(code) or load(code)
+						if func then
+							pcall(func)
+						else
+							warn("❌ Error al compilar:", err)
+						end
+					end
+				end)
+
+				-- Copiar
+				copyBtn.MouseButton1Click:Connect(function()
+					local raw = fetchRawScript("https://scriptblox.com/api/script/raw/" .. script.slug)
+					local code = (type(raw) == "table" and raw.result) or raw
+					if code and setclipboard then
+						setclipboard(code)
+					end
+				end)
+			end
+
+			RecentsScroll.CanvasSize = UDim2.new(0, 0, 0, RecentsLayout.AbsoluteContentSize.Y + 10)
+		end
+	end
+end
+
+-- 🔘 Conectar botón
+RecentsBtn.MouseButton1Click:Connect(function()
+	RecentsFrame.Visible = not RecentsFrame.Visible
+	if RecentsFrame.Visible then
+		showRecentsFromScriptBlox()
+	end
+end)
+
+
+
+
+
+
+
+
+
+
+
+
 local SearchBox = Instance.new("TextBox", MainFrame)
 SearchBox.Size = UDim2.new(0.7, -10, 0, 32)
 SearchBox.Position = UDim2.new(0, 10, 0, 50)
@@ -255,6 +440,8 @@ ConfigFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 ConfigFrame.Visible = false
 Instance.new("UICorner", ConfigFrame).CornerRadius = UDim.new(0, 8)
 
+
+
 local configLabel = Instance.new("TextLabel", ConfigFrame)
 configLabel.Size = UDim2.new(1, 0, 0, 24)
 configLabel.Position = UDim2.new(0, 0, 0, 0)
@@ -268,22 +455,24 @@ configLabel.BackgroundTransparency = 1
 local bgInput = Instance.new("TextBox", ConfigFrame)
 bgInput.Size = UDim2.new(1, -20, 0, 24)
 bgInput.Position = UDim2.new(0, 10, 0, 30)
-bgInput.PlaceholderText = "ID de imagen de fondo (ej: 123456789)"
+bgInput.PlaceholderText = "ID De imagen"
 bgInput.Font = Enum.Font.Gotham
 bgInput.TextSize = 14
 bgInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 bgInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+bgInput.Text = ""
 Instance.new("UICorner", bgInput).CornerRadius = UDim.new(0, 5)
 
 
 local transparencyInput = Instance.new("TextBox", ConfigFrame)
 transparencyInput.Size = UDim2.new(1, -20, 0, 24)
 transparencyInput.Position = UDim2.new(0, 10, 0, 60)
-transparencyInput.PlaceholderText = "Transparencia (0 a 1, ej: 0.3)"
+transparencyInput.PlaceholderText = "Transparencia 0 - 1"
 transparencyInput.Font = Enum.Font.Gotham
 transparencyInput.TextSize = 14
 transparencyInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 transparencyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+transparencyInput.Text = ""
 Instance.new("UICorner", transparencyInput).CornerRadius = UDim.new(0, 5)
 
 
@@ -293,6 +482,7 @@ backgroundImage.Position = UDim2.new(0, 0, 0, 0)
 backgroundImage.ZIndex = -10
 backgroundImage.BackgroundTransparency = 1
 backgroundImage.ImageTransparency = 0.85
+
 backgroundImage.Visible = false
 
 
@@ -310,8 +500,18 @@ end)
 
 transparencyInput.FocusLost:Connect(function()
 	local val = tonumber(transparencyInput.Text)
-	if val and val >= 0 and val <= 1 then
-		MainFrame.BackgroundTransparency = val
+	if val and val >= 0 and val <= 0.9 then
+		local elementsToAffect = {
+			MainFrame,
+			ResultsFrame,
+			ConfigFrame,
+			RecentsFrame,
+			RecentsScroll
+		}
+
+		for _, gui in ipairs(elementsToAffect) do
+			gui.BackgroundTransparency = val
+		end
 	end
 end)
 
@@ -448,6 +648,22 @@ keyLabel.Parent = Item
 		gameLabel.BackgroundTransparency = 1
 		gameLabel.TextXAlignment = Enum.TextXAlignment.Left
 
+
+local viewsLabel = Instance.new("TextLabel", Item)
+viewsLabel.Text = "👁️ " .. tostring(script.views or 0) .. " Ejecuciones/vistas"
+viewsLabel.Size = UDim2.new(1, -20, 0, 20)
+viewsLabel.Position = UDim2.new(0, 10, 0, 54)
+viewsLabel.Font = Enum.Font.Gotham
+viewsLabel.TextSize = 14
+viewsLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+viewsLabel.BackgroundTransparency = 1
+viewsLabel.TextXAlignment = Enum.TextXAlignment.Left
+viewsLabel.ZIndex = 1
+
+
+
+
+
 		local executeBtn = Instance.new("TextButton", Item)
 		executeBtn.Size = UDim2.new(0, 100, 0, 25)
 		executeBtn.Position = UDim2.new(1, -210, 1, -28)
@@ -473,16 +689,32 @@ keyLabel.Parent = Item
 			if raw then
 				local code = (type(raw) == "table" and raw.result) or raw
 				local func, err = loadstring and loadstring(code) or load(code)
-				if func then
-					pcall(func)
-					local exists = false
-					for _, s in pairs(history) do
-						if s.slug == script.slug then exists = true break end
-					end
-					if not exists then
-						table.insert(history, 1, {title = script.title, slug = script.slug, game = script.game})
-						saveHistory()
-					end
+if func then
+	pcall(func)
+
+	local exists = false
+	for i, s in ipairs(history) do
+		if s.slug == script.slug then
+			-- Actualiza vistas reales si ejecutaste el mismo script otra vez
+			history[i].views = script.views or s.views
+			exists = true
+			break
+		end
+	end
+
+	if not exists then
+table.insert(history, 1, {
+	title = script.title,
+	slug = script.slug,
+	game = script.game,
+	views = script.views or 0,
+	key = script.key
+})
+
+	end
+
+	saveHistory()
+
 				else
 					warn("❌ Error al compilar:", err)
 				end
@@ -563,6 +795,11 @@ end)
 
 SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
 	if SearchBox.Text == "" then
+		for _, c in ipairs(ResultsFrame:GetChildren()) do
+			if c:IsA("Frame") or c:IsA("TextLabel") then
+				c:Destroy()
+			end
+		end
 		showScripts(history, true)
 	end
 end)
