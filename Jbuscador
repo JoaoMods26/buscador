@@ -34,6 +34,31 @@ local function saveHistory()
 	end
 end
 
+
+
+---Carga fondo 
+
+local configFile = "Configjmodsbuscador.json"
+local userConfig = { backgroundId = "", transparency = 0.2 }
+
+-- Cargar config guardada
+if isfile and isfile(configFile) then
+	local data = readfile(configFile)
+	if data then
+		local success, decoded = pcall(function() return HttpService:JSONDecode(data) end)
+		if success and decoded then
+			userConfig = decoded
+		end
+	end
+end
+
+-- Función para guardar
+local function saveConfig()
+	if writefile then
+		writefile(configFile, HttpService:JSONEncode(userConfig))
+	end
+end
+
 ---Configs
 
 
@@ -92,16 +117,7 @@ logoImage.Image = "rbxassetid://128308831323216" -- cambia a tu ID real si es ot
 logoImage.BackgroundTransparency = 1
 logoImage.ZIndex = 1000
 
--- Animación de logo (agranda y luego desaparece)
-game:GetService("TweenService"):Create(logoImage, TweenInfo.new(1, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0, 400, 0, 400)}):Play()
-task.wait(2)
 
--- Fade out logo
-game:GetService("TweenService"):Create(introFrame, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
-game:GetService("TweenService"):Create(logoImage, TweenInfo.new(1), {ImageTransparency = 1}):Play()
-task.wait(1)
-
-introFrame:Destroy()
 
 
 
@@ -133,15 +149,177 @@ logoImage.BackgroundTransparency = 1
 logoImage.ZIndex = 1000
 
 -- Animación de logo (agranda y luego desaparece)
-game:GetService("TweenService"):Create(logoImage, TweenInfo.new(1, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0, 400, 0, 400)}):Play()
-task.wait(2)
+-- 🌟 Animación de inicio con variación aleatoria
+math.randomseed(tick() + math.floor(os.clock() * 1000))
+local rng = Random.new()
+local animacionYaEjecutada = false
 
--- Fade out logo
-game:GetService("TweenService"):Create(introFrame, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
-game:GetService("TweenService"):Create(logoImage, TweenInfo.new(1), {ImageTransparency = 1}):Play()
-task.wait(1)
+local function animacionInicioAleatoria()
+	if animacionYaEjecutada then return end
+	animacionYaEjecutada = true
 
-introFrame:Destroy()
+	local ts = game:GetService("TweenService")
+	local tipo = rng:NextInteger(1, 10)
+
+	-- Reiniciar estado del logo
+	logoImage.Visible = true
+	logoImage.ImageTransparency = 0
+	logoImage.Rotation = 0
+	logoImage.Position = UDim2.new(0.5, 0, 0.5, 0)
+	logoImage.Size = UDim2.new(0, 400, 0, 400)
+
+	if tipo == 1 then
+		-- Clásico desde el centro
+		logoImage.Size = UDim2.new(0, 0, 0, 0)
+		ts:Create(logoImage, TweenInfo.new(1, Enum.EasingStyle.Back), {
+			Size = UDim2.new(0, 400, 0, 400)
+		}):Play()
+		task.wait(2)
+
+	elseif tipo == 2 then
+		-- Desde esquina inferior izquierda
+		logoImage.Position = UDim2.new(0, -150, 1, 150)
+		logoImage.Size = UDim2.new(0, 200, 0, 200)
+		ts:Create(logoImage, TweenInfo.new(2, Enum.EasingStyle.Quint), {
+			Position = UDim2.new(0.5, 0, 0.5, 0),
+			Size = UDim2.new(0, 400, 0, 400)
+		}):Play()
+		task.wait(2)
+
+	elseif tipo == 3 then
+		-- Aparece gigante y se reduce
+		logoImage.Size = UDim2.new(0, 1000, 0, 1000)
+		ts:Create(logoImage, TweenInfo.new(2), {
+			Size = UDim2.new(0, 400, 0, 400)
+		}):Play()
+		task.wait(2)
+
+	elseif tipo == 4 then
+		-- Va de un lado a otro y termina en el centro
+		logoImage.Position = UDim2.new(0, -400, 0.5, 0)
+		logoImage.Size = UDim2.new(0, 300, 0, 300)
+		ts:Create(logoImage, TweenInfo.new(1.5), {
+			Position = UDim2.new(1, 400, 0.5, 0)
+		}):Play()
+		task.wait(1.6)
+		ts:Create(logoImage, TweenInfo.new(0.6), {
+			Position = UDim2.new(0.5, 0, 0.5, 0),
+			Size = UDim2.new(0, 400, 0, 400)
+		}):Play()
+		task.wait(0.6)
+
+	elseif tipo == 5 then
+		-- Gira mientras aparece
+		logoImage.Rotation = -360
+		logoImage.Size = UDim2.new(0, 0, 0, 0)
+		ts:Create(logoImage, TweenInfo.new(2), {
+			Size = UDim2.new(0, 400, 0, 400),
+			Rotation = 0
+		}):Play()
+		task.wait(2)
+
+	elseif tipo == 6 then
+		-- Rebota desde arriba
+		logoImage.Position = UDim2.new(0.5, 0, -0.5, 0)
+		logoImage.Size = UDim2.new(0, 250, 0, 250)
+		ts:Create(logoImage, TweenInfo.new(1.5, Enum.EasingStyle.Bounce), {
+			Position = UDim2.new(0.5, 0, 0.5, 0),
+			Size = UDim2.new(0, 400, 0, 400)
+		}):Play()
+		task.wait(1.6)
+
+	elseif tipo == 7 then
+		-- Rebotes como pelota de goma
+		local path = {
+			UDim2.new(0.5, -300, 0.1, 0),
+			UDim2.new(0.5, 300, 0.2, 0),
+			UDim2.new(0.5, -150, 0.3, 0),
+			UDim2.new(0.5, 75, 0.4, 0),
+			UDim2.new(0.5, 0, 0.5, 0)
+		}
+		logoImage.Position = UDim2.new(0.5, 0, -0.2, 0)
+		logoImage.Size = UDim2.new(0, 300, 0, 300)
+		for _, pos in ipairs(path) do
+			ts:Create(logoImage, TweenInfo.new(0.25, Enum.EasingStyle.Bounce), {
+				Position = pos
+			}):Play()
+			task.wait(0.25)
+		end
+
+	elseif tipo == 8 then
+		-- Gira rápido y se detiene
+		logoImage.Rotation = -1440
+		ts:Create(logoImage, TweenInfo.new(2, Enum.EasingStyle.Quad), {
+			Rotation = 0
+		}):Play()
+		task.wait(2)
+
+	elseif tipo == 9 then
+		-- Efecto glitch (posición aleatoria)
+		for _ = 1, 6 do
+			logoImage.Position = UDim2.new(math.random(), 0, math.random(), 0)
+			logoImage.ImageTransparency = 1
+			task.wait(0.05)
+			logoImage.ImageTransparency = 0
+			task.wait(0.05)
+		end
+		logoImage.Position = UDim2.new(0.5, 0, 0.5, 0)
+		ts:Create(logoImage, TweenInfo.new(0.6), {
+			Size = UDim2.new(0, 400, 0, 400)
+		}):Play()
+		task.wait(1)
+
+	elseif tipo == 10 then
+		-- Explota y se reconstruye desde clones
+		local clones = {}
+		local directions = {
+			Vector2.new(-1, -1),
+			Vector2.new(1, -1),
+			Vector2.new(-1, 1),
+			Vector2.new(1, 1)
+		}
+
+		for _, dir in ipairs(directions) do
+			local clone = logoImage:Clone()
+			clone.Parent = introFrame
+			clone.Position = UDim2.new(0.5, 0, 0.5, 0)
+			clone.Size = UDim2.new(0, 400, 0, 400)
+			clone.ImageTransparency = 0
+			table.insert(clones, clone)
+
+			ts:Create(clone, TweenInfo.new(0.5), {
+				Position = UDim2.new(0.5 + dir.X, 0, 0.5 + dir.Y, 0),
+				ImageTransparency = 1
+			}):Play()
+		end
+
+		task.wait(0.5)
+
+		logoImage.Position = UDim2.new(0.5, 0, 0.5, 0)
+		logoImage.Size = UDim2.new(0, 100, 0, 100)
+		logoImage.ImageTransparency = 1
+		ts:Create(logoImage, TweenInfo.new(1), {
+			Size = UDim2.new(0, 400, 0, 400),
+			ImageTransparency = 0
+		}):Play()
+
+		task.wait(1.2)
+
+		for _, c in ipairs(clones) do
+			c:Destroy()
+		end
+	end
+
+	-- 🧼 Fade out común
+	ts:Create(introFrame, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
+	ts:Create(logoImage, TweenInfo.new(1), {ImageTransparency = 1}):Play()
+	task.wait(1)
+	introFrame:Destroy()
+end
+
+-- Ejecutar animación
+animacionInicioAleatoria()
+
 
 
 
@@ -400,7 +578,9 @@ Instance.new("UICorner", ConfigBtn).CornerRadius = UDim.new(0, 6)
 
 
 
--- 🔘 Botón de recientes
+
+---Recientes/Tendencia
+
 local RecentsBtn = Instance.new("TextButton", MainFrame)
 RecentsBtn.Size = UDim2.new(0, 30, 0, 30)
 RecentsBtn.Position = UDim2.new(1, -140, 0, 5) -- A la izquierda de Config
@@ -556,29 +736,91 @@ viewsLabel.ZIndex = 7
 				Instance.new("UICorner", copyBtn).CornerRadius = UDim.new(0, 5)
 
 				-- Ejecutar
-				executeBtn.MouseButton1Click:Connect(function()
-					local raw = fetchRawScript("https://scriptblox.com/api/script/raw/" .. script.slug)
-					if raw then
-						local code = (type(raw) == "table" and raw.result) or raw
-						local func, err = loadstring and loadstring(code) or load(code)
-						if func then
-							pcall(func)
-						else
-							warn("❌ Error al compilar:", err)
-						end
-					end
-				end)
+local function fetchRawScript(url)
+	local response = request({
+		Url = url,
+		Method = "GET",
+		Headers = { ["Content-Type"] = "application/json" }
+	})
 
-				-- Copiar
-				copyBtn.MouseButton1Click:Connect(function()
-					local raw = fetchRawScript("https://scriptblox.com/api/script/raw/" .. script.slug)
-					local code = (type(raw) == "table" and raw.result) or raw
-					if code and setclipboard then
-						setclipboard(code)
-					end
-				end)
+	if response and response.Body then
+		local success, data = pcall(function()
+			return HttpService:JSONDecode(response.Body)
+		end)
+
+		if success and typeof(data) == "table" then
+			-- Respuesta esperada para recientes: { result = "código..." }
+			if data.result and typeof(data.result) == "string" then
+				return data.result
 			end
+			-- Respuesta esperada para buscador: tabla con más info
+			return data
+		end
 
+		-- Si no es JSON válido, probablemente sea un string plano ejecutable
+		return response.Body
+	end
+
+	return nil
+end
+
+-- EJECUTAR (RECENTES)
+executeBtn.MouseButton1Click:Connect(function()
+--	print("🟠 Ejecutar script reciente:", script.slug)
+
+	local url = "https://scriptblox.com/api/script/raw/" .. script.slug
+	local raw = fetchRawScript(url)
+
+	if not raw then
+	--	warn("❌ No se pudo obtener el script (nil)")
+		return
+	end
+
+	local code = (typeof(raw) == "table" and raw.result) or raw
+
+	if not code or typeof(code) ~= "string" then
+		--warn("⚠️ Código inválido o no es string")
+		return
+	end
+
+	local func, err = loadstring and loadstring(code) or load(code)
+	if func then
+		local success, execErr = pcall(func)
+		if not success then
+		--	warn("❌ Error en ejecución:", execErr)
+		end
+	else
+	--	warn("❌ Error en compilación:", err)
+	end
+end)
+
+-- COPIAR (RECENTES)
+copyBtn.MouseButton1Click:Connect(function()
+	local url = "https://scriptblox.com/api/script/raw/" .. script.slug
+	local raw = fetchRawScript(url)
+
+	if not raw then
+--		warn("❌ No se pudo obtener el script (nil)")
+		return
+	end
+
+	local code = (typeof(raw) == "table" and raw.result) or raw
+
+--	print("🔍 Tipo de code:", typeof(code))
+	if typeof(code) == "string" then
+		if setclipboard then
+			setclipboard(code)
+	--		print("📋 Script copiado exitosamente.")
+		else
+	--		warn("⚠️ Tu exploit no soporta setclipboard.")
+		end
+	else
+	--	warn("⚠️ El script recibido no es string, es:", typeof(code))
+	end
+end)
+
+
+end
 			RecentsScroll.CanvasSize = UDim2.new(0, 0, 0, RecentsLayout.AbsoluteContentSize.Y + 10)
 		end
 
@@ -590,6 +832,7 @@ RecentsBtn.MouseButton1Click:Connect(function()
 		showRecentsFromScriptBlox()
 	end
 end)
+---
 
 
 
@@ -684,9 +927,15 @@ backgroundImage.Size = UDim2.new(1, 0, 1, 0)
 backgroundImage.Position = UDim2.new(0, 0, 0, 0)
 backgroundImage.ZIndex = -10
 backgroundImage.BackgroundTransparency = 1
-backgroundImage.ImageTransparency = 0.85
-
+backgroundImage.ImageTransparency = 0.5
 backgroundImage.Visible = false
+
+
+
+
+
+
+
 
 
 ConfigBtn.MouseButton1Click:Connect(function()
@@ -698,6 +947,8 @@ bgInput.FocusLost:Connect(function()
 	if id then
 		backgroundImage.Image = "rbxassetid://" .. id
 		backgroundImage.Visible = true
+		userConfig.backgroundId = id
+		saveConfig()
 	end
 end)
 
@@ -715,8 +966,12 @@ transparencyInput.FocusLost:Connect(function()
 		for _, gui in ipairs(elementsToAffect) do
 			gui.BackgroundTransparency = val
 		end
+
+		userConfig.transparency = val
+		saveConfig()
 	end
 end)
+
 
 
 
@@ -738,26 +993,27 @@ end
 
 --Traductor
 local function traducirATextoIngles(texto)
+	local url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=" .. HttpService:UrlEncode(texto)
+
 	local response = request({
-		Url = "https://libretranslate.com/translate",
-		Method = "POST",
+		Url = url,
+		Method = "GET",
 		Headers = {
-			["Content-Type"] = "application/x-www-form-urlencoded"
-		},
-		Body = "q=" .. HttpService:UrlEncode(texto) ..
-			   "&source=auto&target=en&format=text"
+			["Content-Type"] = "application/json"
+		}
 	})
 
 	if response and response.Body then
-		local success, decoded = pcall(function()
+		local success, result = pcall(function()
 			return HttpService:JSONDecode(response.Body)
 		end)
-		if success and decoded and decoded.translatedText then
-			return decoded.translatedText
+
+		if success and typeof(result) == "table" and result[1] and result[1][1] and result[1][1][1] then
+			return result[1][1][1]
 		end
 	end
 
-	return texto -- Si falla, busca lo que escribió el usuario
+	return texto -- Si falla, devuelve el texto original
 end
 
 
@@ -989,7 +1245,10 @@ local function searchScripts(query)
 	task.wait(0.05)
 
 	task.spawn(function()
+
+
 		local translatedQuery = traducirATextoIngles(query)
+
 
 		local url = "https://scriptblox.com/api/script/search?q=" .. HttpService:UrlEncode(translatedQuery)
 		local data = fetchRawScript(url)
@@ -1093,14 +1352,15 @@ showScripts(history, true)
 
 
 
+
+
 ---solo la primera vez
 showNotification("Subscríbete: joao_mods", "Apóyame y mira más scripts", "https://youtube.com/@joao_mods0?si=Pv8NCVM5sT4Vr4F0")
 
 
 task.spawn(function()
 	while true do
-		task.wait(600) -- 10 minutos
-
+		task.wait(600)
 		showNotification("Recuerda", "Para mejores resultados busca en inglés")
 		task.wait(60)
 
@@ -1109,3 +1369,28 @@ task.spawn(function()
 end)
 
 
+
+
+
+
+task.defer(function()
+	if userConfig.backgroundId and tostring(userConfig.backgroundId) ~= "" then
+		backgroundImage.Image = "rbxassetid://" .. tostring(userConfig.backgroundId)
+		backgroundImage.Visible = true
+	end
+
+	if userConfig.transparency then
+		local val = tonumber(userConfig.transparency)
+		local elementsToAffect = {
+			MainFrame,
+			ResultsFrame,
+			ConfigFrame,
+			RecentsFrame,
+			RecentsScroll
+		}
+
+		for _, gui in ipairs(elementsToAffect) do
+			gui.BackgroundTransparency = val
+		end
+	end
+end)
