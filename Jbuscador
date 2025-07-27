@@ -580,16 +580,42 @@ Instance.new("UICorner", ConfigBtn).CornerRadius = UDim.new(0, 6)
 
 
 ---Recientes/Tendencia
+-- 💡 Nota "más usados →" encima del botón Trading
+local tipLabel = Instance.new("TextLabel", MainFrame)
+tipLabel.Size = UDim2.new(0, 120, 0, 20)
+tipLabel.Position = UDim2.new(1, -270, 0, 10) 
+tipLabel.Text = "más usados →"
+tipLabel.Font = Enum.Font.Fondamento -- manuscrito bonito (cambia si no tienes ese)
+tipLabel.TextSize = 14
+tipLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+tipLabel.BackgroundTransparency = 1
+tipLabel.TextXAlignment = Enum.TextXAlignment.Right
+tipLabel.TextYAlignment = Enum.TextYAlignment.Center
+tipLabel.ZIndex = 99
+
+
+task.delay(120, function()
+	if tipLabel then
+		tipLabel:Destroy()
+	end
+end)
+
+
+
 
 local RecentsBtn = Instance.new("TextButton", MainFrame)
 RecentsBtn.Size = UDim2.new(0, 30, 0, 30)
 RecentsBtn.Position = UDim2.new(1, -140, 0, 5) -- A la izquierda de Config
-RecentsBtn.Text = "🕑"
+RecentsBtn.Text = "📈"
 RecentsBtn.Font = Enum.Font.GothamBold
 RecentsBtn.TextSize = 18
 RecentsBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 RecentsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 Instance.new("UICorner", RecentsBtn).CornerRadius = UDim.new(0, 6)
+
+
+
+
 
 -- 🔳 Frame de recientes (encima)
 local RecentsFrame = Instance.new("Frame", MainFrame)
@@ -598,18 +624,24 @@ RecentsFrame.Position = UDim2.new(0, 10, 0, 90)
 RecentsFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 RecentsFrame.BackgroundTransparency = 0.2
 RecentsFrame.Visible = false
-RecentsFrame.ZIndex = 5
+RecentsFrame.ZIndex = 100
+RecentsFrame.Active = true -- ✅ importante
 Instance.new("UICorner", RecentsFrame).CornerRadius = UDim.new(0, 8)
 
 
 
--- Scroll
+
+
+
+
 local RecentsScroll = Instance.new("ScrollingFrame", RecentsFrame)
 RecentsScroll.Size = UDim2.new(1, 0, 1, 0)
 RecentsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 RecentsScroll.ScrollBarThickness = 6
 RecentsScroll.BackgroundTransparency = 1
-RecentsScroll.ZIndex = 6
+RecentsScroll.ZIndex = 101
+RecentsScroll.Active = true -- ✅ importante
+
 
 
 
@@ -683,8 +715,15 @@ if cachedTrending then
 				nameLabel.ZIndex = 7
 
 				local gameLabel = Instance.new("TextLabel", Item)
-				gameLabel.Text = "📜 " .. (script.game and script.game.name or "Universal")
-				gameLabel.Size = UDim2.new(1, -20, 0, 20)
+				
+                
+                
+                gameLabel.Text = "📜 " .. (script.game and script.game.name or "Universal")
+				
+                
+                
+                
+                gameLabel.Size = UDim2.new(1, -20, 0, 20)
 				gameLabel.Position = UDim2.new(0, 10, 0, 34)
 				gameLabel.Font = Enum.Font.Gotham
 				gameLabel.TextSize = 14
@@ -1245,30 +1284,46 @@ local function searchScripts(query)
 	task.wait(0.05)
 
 	task.spawn(function()
-
+ 
 
 		local translatedQuery = traducirATextoIngles(query)
 
 
-		local url = "https://scriptblox.com/api/script/search?q=" .. HttpService:UrlEncode(translatedQuery)
-		local data = fetchRawScript(url)
-		loading:Destroy()
+local allScripts = {}
+local maxPages = 4
 
-		if data and data.result and data.result.scripts then
-			showScripts(data.result.scripts, false)
-			saveToFirebase(query, data.result.scripts)
-		else
-			local fallback = loadFromFirebase(query)
-			if fallback then
-				showScripts(fallback, false)
-			else
-				local fail = Instance.new("TextLabel", ResultsFrame)
-				fail.Size = UDim2.new(1, 0, 0, 40)
-				fail.Text = "❌ Sin resultados ni respaldo local."
-				fail.TextColor3 = Color3.new(1, 1, 1)
-				fail.BackgroundTransparency = 1
-			end
+for page = 1, maxPages do
+	local url = "https://scriptblox.com/api/script/search?q=" .. HttpService:UrlEncode(translatedQuery) .. "&page=" .. page
+	local data = fetchRawScript(url)
+
+	if data and data.result and data.result.scripts and #data.result.scripts > 0 then
+		for _, script in ipairs(data.result.scripts) do
+			table.insert(allScripts, script)
 		end
+	else
+		break -- no más resultados
+	end
+end
+
+
+loading:Destroy()
+
+if #allScripts > 0 then
+	showScripts(allScripts, false)
+	saveToFirebase(query, allScripts)
+else
+	local fallback = loadFromFirebase(query)
+	if fallback then
+		showScripts(fallback, false)
+	else
+		local fail = Instance.new("TextLabel", ResultsFrame)
+		fail.Size = UDim2.new(1, 0, 0, 40)
+		fail.Text = "❌ Sin resultados ni respaldo local."
+		fail.TextColor3 = Color3.new(1, 1, 1)
+		fail.BackgroundTransparency = 1
+	end
+end
+
 	end)
 end
 
