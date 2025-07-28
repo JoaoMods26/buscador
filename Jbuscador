@@ -376,6 +376,24 @@ local function showNotification(title, message, link)
 		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 60, 90))
 	}
 	gradient.Rotation = 45
+---Auto tamaño
+
+local UserInputService = game:GetService("UserInputService")
+
+
+	if isMobile then
+		notifFrame.Size = UDim2.new(0, 210, 0, 70)
+		notifFrame.Position = UDim2.new(1, -220, 0, 20)
+	else
+		notifFrame.Size = UDim2.new(0, 300, 0, 100)
+		notifFrame.Position = UDim2.new(1, -310, 0, 20)
+	end
+
+
+
+
+
+
 
 	local titleLabel = Instance.new("TextLabel", notifFrame)
 	titleLabel.Size = UDim2.new(1, -20, 0, 30)
