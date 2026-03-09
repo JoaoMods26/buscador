@@ -1,1469 +1,1096 @@
--- Servicios
-local HttpService = game:GetService("HttpService")
-local Players = game:GetService("Players")
-local Player = Players.LocalPlayer
+-- ============================================================
+--  Jmods Script Buscador — CoreGui Edition
+--  by joao_mods | YouTube: @joao_mods0
+-- ============================================================
 
--- 
-local request = (http and http.request) or (syn and syn.request) or (fluxus and fluxus.request)
-if not request then
-	warn("❌ Tu exploit no soporta request HTTP.")
-	return
-end
+local HttpService      = game:GetService("HttpService")
+local TweenService     = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGuiService   = game:GetService("CoreGui")
 
---
-local FIREBASE_BASE_URL = "https://scriptbloxxd-default-rtdb.firebaseio.com/scripts/"
+local request = (syn and syn.request) or (http and http.request)
+	or (fluxus and fluxus.request) or (request) or (httprequest)
+if not request then warn("❌ Tu exploit no soporta HTTP request.") return end
 
--- 
-local writefile, readfile, isfile = writefile, readfile, isfile
-local historyFile = "BuscadorDeSexoJmods.json"
-local history = {}
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+-- ============================================================
+-- ARCHIVOS LOCALES
+-- ============================================================
+local historyFile = "JmodsHistorial.json"
+local configFile  = "JmodsConfig.json"
+local history     = {}
+local userConfig  = { backgroundId = "", transparency = 0.2 }
 
 if isfile and isfile(historyFile) then
-	local data = readfile(historyFile)
-	if data then
-		local success, decoded = pcall(function() return HttpService:JSONDecode(data) end)
-		if success and decoded then
-			history = decoded
-		end
-	end
+	local ok, d = pcall(function() return HttpService:JSONDecode(readfile(historyFile)) end)
+	if ok and d then history = d end
 end
-
-local function saveHistory()
-	if writefile then
-		writefile(historyFile, HttpService:JSONEncode(history))
-	end
-end
-
-
-
----Carga fondo 
-
-local configFile = "Configjmodsbuscador.json"
-local userConfig = { backgroundId = "", transparency = 0.2 }
-
--- Cargar config guardada
 if isfile and isfile(configFile) then
-	local data = readfile(configFile)
-	if data then
-		local success, decoded = pcall(function() return HttpService:JSONDecode(data) end)
-		if success and decoded then
-			userConfig = decoded
-		end
-	end
+	local ok, d = pcall(function() return HttpService:JSONDecode(readfile(configFile)) end)
+	if ok and d then userConfig = d end
 end
-
--- Función para guardar
+local function saveHistory()
+	if writefile then pcall(writefile, historyFile, HttpService:JSONEncode(history)) end
+end
 local function saveConfig()
-	if writefile then
-		writefile(configFile, HttpService:JSONEncode(userConfig))
-	end
+	if writefile then pcall(writefile, configFile, HttpService:JSONEncode(userConfig)) end
 end
 
----Configs
-
-
-
---
-
-local function saveToFirebase(query, scripts)
-	local url = FIREBASE_BASE_URL .. HttpService:UrlEncode(query) .. ".json"
-	local response = request({
-		Url = url,
-		Method = "PUT",
-		Headers = {["Content-Type"] = "application/json"},
-		Body = HttpService:JSONEncode(scripts)
-	})
-	return response and response.StatusCode == 200
+-- ============================================================
+-- FIREBASE
+-- ============================================================
+local FB = "https://scriptbloxxd-default-rtdb.firebaseio.com/scripts/"
+local function saveToFirebase(q, s)
+	pcall(function()
+		request({ Url=FB..HttpService:UrlEncode(q)..".json", Method="PUT",
+			Headers={["Content-Type"]="application/json"}, Body=HttpService:JSONEncode(s) })
+	end)
 end
-
-local function loadFromFirebase(query)
-	local url = FIREBASE_BASE_URL .. HttpService:UrlEncode(query) .. ".json"
-	local response = request({
-		Url = url,
-		Method = "GET"
-	})
-	if response and response.Body then
-		local success, data = pcall(function()
-			return HttpService:JSONDecode(response.Body)
-		end)
-		if success then return data end
+local function loadFromFirebase(q)
+	local ok, r = pcall(function()
+		return request({ Url=FB..HttpService:UrlEncode(q)..".json", Method="GET" })
+	end)
+	if ok and r and r.Body then
+		local s, d = pcall(function() return HttpService:JSONDecode(r.Body) end)
+		if s and d then return d end
 	end
 	return nil
 end
 
-local function apiDisponible()
-	local checkUrl = "https://scriptblox.com/api/script/search?q=test"
-	local response = request({
-		Url = checkUrl,
-		Method = "GET"
-	})
-	return response and response.StatusCode == 200
+-- ============================================================
+-- UTILIDADES
+-- ============================================================
+local function tw(obj, props, t, style, dir)
+	TweenService:Create(obj,
+		TweenInfo.new(t or 0.3, style or Enum.EasingStyle.Quart, dir or Enum.EasingDirection.Out),
+		props):Play()
 end
 
+local function makeDraggable(frame, handle)
+	local dragging, mp, fp = false, nil, nil
+	handle.InputBegan:Connect(function(inp)
+		if inp.UserInputType == Enum.UserInputType.MouseButton1
+		or inp.UserInputType == Enum.UserInputType.Touch then
+			dragging = true; mp = inp.Position; fp = frame.Position
+			inp.Changed:Connect(function()
+				if inp.UserInputState == Enum.UserInputState.End then dragging = false end
+			end)
+		end
+	end)
+	handle.InputChanged:Connect(function(inp)
+		if dragging and (inp.UserInputType == Enum.UserInputType.MouseMovement
+		or inp.UserInputType == Enum.UserInputType.Touch) then
+			local d = inp.Position - mp
+			frame.Position = UDim2.new(fp.X.Scale, fp.X.Offset+d.X, fp.Y.Scale, fp.Y.Offset+d.Y)
+		end
+	end)
+end
 
+-- ============================================================
+-- SCREENGUI EN COREGUI
+-- ============================================================
+local _ex = CoreGuiService:FindFirstChild("JmodsScriptBuscador")
+if _ex then _ex:Destroy() end
 
+local JmodsGui = Instance.new("ScreenGui")
+JmodsGui.Name           = "JmodsScriptBuscador"
+JmodsGui.ResetOnSpawn   = false
+JmodsGui.DisplayOrder   = 999
+JmodsGui.IgnoreGuiInset = true
+JmodsGui.Parent         = CoreGuiService
 
--- 🌟 Pantalla de inicio con logo
-local introFrame = Instance.new("Frame", ScreenGui)
-introFrame.Size = UDim2.new(1, 0, 1, 0)
-introFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-introFrame.ZIndex = 999
-
-local logoImage = Instance.new("ImageLabel", introFrame)
-logoImage.AnchorPoint = Vector2.new(0.5, 0.5)
-logoImage.Position = UDim2.new(0.5, 0, 0.5, 0)
-logoImage.Size = UDim2.new(0, 0, 0, 0)
-logoImage.Image = "rbxassetid://128308831323216" -- cambia a tu ID real si es otro
-logoImage.BackgroundTransparency = 1
-logoImage.ZIndex = 1000
-
-
-
-
-
-
-
-
--- Principal
-local ScreenGui = Instance.new("ScreenGui", Player:WaitForChild("PlayerGui"))
-ScreenGui.Name = "ScriptBloxInterface"
-ScreenGui.ResetOnSpawn = false
-
-
-
-
-
--- 🌟 Pantalla de inicio con logo (Intro)
-local introFrame = Instance.new("Frame", ScreenGui)
-introFrame.Size = UDim2.new(1, 0, 1, 0)
-introFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-introFrame.BackgroundTransparency = 1
-introFrame.ZIndex = 999
-
-local logoImage = Instance.new("ImageLabel", introFrame)
-logoImage.AnchorPoint = Vector2.new(0.5, 0.5)
-logoImage.Position = UDim2.new(0.5, 0, 0.5, 0)
-logoImage.Size = UDim2.new(0, 0, 0, 0)
-logoImage.Image = "rbxassetid://128308831323216" -- tu ID real
-logoImage.BackgroundTransparency = 1
-logoImage.ZIndex = 1000
-
--- Animación de logo (agranda y luego desaparece)
--- 🌟 Animación de inicio con variación aleatoria
+-- ============================================================
+-- INTRO — 10 TIPOS ALEATORIOS
+-- FIX CLAVE: task.wait() al inicio da 1 frame de gracia para que
+-- la ScreenGui esté completamente renderizada. Sin este wait,
+-- AbsoluteSize puede ser Vector2(0,0) y los tweens que dependen
+-- de posición/tamaño no se ven, haciendo parecer que la intro
+-- "no apareció". Se eliminó el guard animacionYaEjecutada porque
+-- runIntro() solo se llama UNA vez desde el task.spawn principal.
+-- ============================================================
 math.randomseed(tick() + math.floor(os.clock() * 1000))
-local rng = Random.new()
-local animacionYaEjecutada = false
+local _rng = Random.new()
 
-local function animacionInicioAleatoria()
-	if animacionYaEjecutada then return end
-	animacionYaEjecutada = true
+local JmodsIntroFrame = Instance.new("Frame", JmodsGui)
+JmodsIntroFrame.Name                   = "JmodsIntroFrame"
+JmodsIntroFrame.Size                   = UDim2.new(1,0,1,0)
+JmodsIntroFrame.BackgroundTransparency = 1
+JmodsIntroFrame.ZIndex                 = 999
+JmodsIntroFrame.BorderSizePixel        = 0
 
-	local ts = game:GetService("TweenService")
-	local tipo = rng:NextInteger(1, 10)
+local JmodsIntroLogo = Instance.new("ImageLabel", JmodsIntroFrame)
+JmodsIntroLogo.Name                   = "JmodsIntroLogo"
+JmodsIntroLogo.AnchorPoint            = Vector2.new(0.5, 0.5)
+JmodsIntroLogo.Position               = UDim2.new(0.5,0,0.5,0)
+JmodsIntroLogo.Size                   = UDim2.new(0,400,0,400)
+JmodsIntroLogo.Image                  = "rbxassetid://128308831323216"
+JmodsIntroLogo.BackgroundTransparency = 1
+JmodsIntroLogo.ZIndex                 = 1000
 
-	-- Reiniciar estado del logo
-	logoImage.Visible = true
-	logoImage.ImageTransparency = 0
-	logoImage.Rotation = 0
-	logoImage.Position = UDim2.new(0.5, 0, 0.5, 0)
-	logoImage.Size = UDim2.new(0, 400, 0, 400)
+local function runIntro()
+	task.wait()  -- 1 frame para que GUI esté lista (fix intros invisibles)
+
+	local ts   = TweenService
+	local tipo = _rng:NextInteger(1, 10)
+
+	JmodsIntroLogo.Visible           = true
+	JmodsIntroLogo.ImageTransparency = 0
+	JmodsIntroLogo.Rotation          = 0
+	JmodsIntroLogo.Position          = UDim2.new(0.5,0,0.5,0)
+	JmodsIntroLogo.Size              = UDim2.new(0,400,0,400)
 
 	if tipo == 1 then
-		-- Clásico desde el centro
-		logoImage.Size = UDim2.new(0, 0, 0, 0)
-		ts:Create(logoImage, TweenInfo.new(1, Enum.EasingStyle.Back), {
-			Size = UDim2.new(0, 400, 0, 400)
-		}):Play()
+		JmodsIntroLogo.Size = UDim2.new(0,0,0,0)
+		ts:Create(JmodsIntroLogo, TweenInfo.new(1, Enum.EasingStyle.Back),
+			{Size=UDim2.new(0,400,0,400)}):Play()
 		task.wait(2)
-
 	elseif tipo == 2 then
-		-- Desde esquina inferior izquierda
-		logoImage.Position = UDim2.new(0, -150, 1, 150)
-		logoImage.Size = UDim2.new(0, 200, 0, 200)
-		ts:Create(logoImage, TweenInfo.new(2, Enum.EasingStyle.Quint), {
-			Position = UDim2.new(0.5, 0, 0.5, 0),
-			Size = UDim2.new(0, 400, 0, 400)
-		}):Play()
-		task.wait(2)
-
+		JmodsIntroLogo.Position = UDim2.new(0,-150,1,150)
+		JmodsIntroLogo.Size     = UDim2.new(0,200,0,200)
+		ts:Create(JmodsIntroLogo, TweenInfo.new(2, Enum.EasingStyle.Quint),
+			{Position=UDim2.new(0.5,0,0.5,0), Size=UDim2.new(0,400,0,400)}):Play()
+		task.wait(2.2)
 	elseif tipo == 3 then
-		-- Aparece gigante y se reduce
-		logoImage.Size = UDim2.new(0, 1000, 0, 1000)
-		ts:Create(logoImage, TweenInfo.new(2), {
-			Size = UDim2.new(0, 400, 0, 400)
-		}):Play()
-		task.wait(2)
-
+		JmodsIntroLogo.Size = UDim2.new(0,1000,0,1000)
+		ts:Create(JmodsIntroLogo, TweenInfo.new(2), {Size=UDim2.new(0,400,0,400)}):Play()
+		task.wait(2.2)
 	elseif tipo == 4 then
-		-- Va de un lado a otro y termina en el centro
-		logoImage.Position = UDim2.new(0, -400, 0.5, 0)
-		logoImage.Size = UDim2.new(0, 300, 0, 300)
-		ts:Create(logoImage, TweenInfo.new(1.5), {
-			Position = UDim2.new(1, 400, 0.5, 0)
-		}):Play()
+		JmodsIntroLogo.Position = UDim2.new(0,-400,0.5,0)
+		JmodsIntroLogo.Size     = UDim2.new(0,300,0,300)
+		ts:Create(JmodsIntroLogo, TweenInfo.new(1.5),
+			{Position=UDim2.new(1,400,0.5,0)}):Play()
 		task.wait(1.6)
-		ts:Create(logoImage, TweenInfo.new(0.6), {
-			Position = UDim2.new(0.5, 0, 0.5, 0),
-			Size = UDim2.new(0, 400, 0, 400)
-		}):Play()
-		task.wait(0.6)
-
+		ts:Create(JmodsIntroLogo, TweenInfo.new(0.6),
+			{Position=UDim2.new(0.5,0,0.5,0), Size=UDim2.new(0,400,0,400)}):Play()
+		task.wait(0.8)
 	elseif tipo == 5 then
-		-- Gira mientras aparece
-		logoImage.Rotation = -360
-		logoImage.Size = UDim2.new(0, 0, 0, 0)
-		ts:Create(logoImage, TweenInfo.new(2), {
-			Size = UDim2.new(0, 400, 0, 400),
-			Rotation = 0
-		}):Play()
-		task.wait(2)
-
+		JmodsIntroLogo.Rotation = -360
+		JmodsIntroLogo.Size     = UDim2.new(0,0,0,0)
+		ts:Create(JmodsIntroLogo, TweenInfo.new(2),
+			{Size=UDim2.new(0,400,0,400), Rotation=0}):Play()
+		task.wait(2.2)
 	elseif tipo == 6 then
-		-- Rebota desde arriba
-		logoImage.Position = UDim2.new(0.5, 0, -0.5, 0)
-		logoImage.Size = UDim2.new(0, 250, 0, 250)
-		ts:Create(logoImage, TweenInfo.new(1.5, Enum.EasingStyle.Bounce), {
-			Position = UDim2.new(0.5, 0, 0.5, 0),
-			Size = UDim2.new(0, 400, 0, 400)
-		}):Play()
-		task.wait(1.6)
-
+		JmodsIntroLogo.Position = UDim2.new(0.5,0,-0.5,0)
+		JmodsIntroLogo.Size     = UDim2.new(0,250,0,250)
+		ts:Create(JmodsIntroLogo, TweenInfo.new(1.5, Enum.EasingStyle.Bounce),
+			{Position=UDim2.new(0.5,0,0.5,0), Size=UDim2.new(0,400,0,400)}):Play()
+		task.wait(1.8)
 	elseif tipo == 7 then
-		-- Rebotes como pelota de goma
 		local path = {
-			UDim2.new(0.5, -300, 0.1, 0),
-			UDim2.new(0.5, 300, 0.2, 0),
-			UDim2.new(0.5, -150, 0.3, 0),
-			UDim2.new(0.5, 75, 0.4, 0),
-			UDim2.new(0.5, 0, 0.5, 0)
+			UDim2.new(0.5,-300,0.1,0), UDim2.new(0.5,300,0.2,0),
+			UDim2.new(0.5,-150,0.3,0), UDim2.new(0.5,75,0.4,0),
+			UDim2.new(0.5,0,0.5,0)
 		}
-		logoImage.Position = UDim2.new(0.5, 0, -0.2, 0)
-		logoImage.Size = UDim2.new(0, 300, 0, 300)
+		JmodsIntroLogo.Position = UDim2.new(0.5,0,-0.2,0)
+		JmodsIntroLogo.Size     = UDim2.new(0,300,0,300)
 		for _, pos in ipairs(path) do
-			ts:Create(logoImage, TweenInfo.new(0.25, Enum.EasingStyle.Bounce), {
-				Position = pos
-			}):Play()
-			task.wait(0.25)
+			ts:Create(JmodsIntroLogo, TweenInfo.new(0.25, Enum.EasingStyle.Bounce),
+				{Position=pos}):Play()
+			task.wait(0.27)
 		end
-
 	elseif tipo == 8 then
-		-- Gira rápido y se detiene
-		logoImage.Rotation = -1440
-		ts:Create(logoImage, TweenInfo.new(2, Enum.EasingStyle.Quad), {
-			Rotation = 0
-		}):Play()
-		task.wait(2)
-
+		JmodsIntroLogo.Rotation = -1440
+		ts:Create(JmodsIntroLogo, TweenInfo.new(2, Enum.EasingStyle.Quad),
+			{Rotation=0}):Play()
+		task.wait(2.2)
 	elseif tipo == 9 then
-		-- Efecto glitch (posición aleatoria)
 		for _ = 1, 6 do
-			logoImage.Position = UDim2.new(math.random(), 0, math.random(), 0)
-			logoImage.ImageTransparency = 1
-			task.wait(0.05)
-			logoImage.ImageTransparency = 0
-			task.wait(0.05)
+			JmodsIntroLogo.Position          = UDim2.new(math.random(),0,math.random(),0)
+			JmodsIntroLogo.ImageTransparency = 1
+			task.wait(0.06)
+			JmodsIntroLogo.ImageTransparency = 0
+			task.wait(0.06)
 		end
-		logoImage.Position = UDim2.new(0.5, 0, 0.5, 0)
-		ts:Create(logoImage, TweenInfo.new(0.6), {
-			Size = UDim2.new(0, 400, 0, 400)
-		}):Play()
-		task.wait(1)
-
-	elseif tipo == 10 then
-		-- Explota y se reconstruye desde clones
-		local clones = {}
-		local directions = {
-			Vector2.new(-1, -1),
-			Vector2.new(1, -1),
-			Vector2.new(-1, 1),
-			Vector2.new(1, 1)
-		}
-
-		for _, dir in ipairs(directions) do
-			local clone = logoImage:Clone()
-			clone.Parent = introFrame
-			clone.Position = UDim2.new(0.5, 0, 0.5, 0)
-			clone.Size = UDim2.new(0, 400, 0, 400)
-			clone.ImageTransparency = 0
-			table.insert(clones, clone)
-
-			ts:Create(clone, TweenInfo.new(0.5), {
-				Position = UDim2.new(0.5 + dir.X, 0, 0.5 + dir.Y, 0),
-				ImageTransparency = 1
-			}):Play()
-		end
-
-		task.wait(0.5)
-
-		logoImage.Position = UDim2.new(0.5, 0, 0.5, 0)
-		logoImage.Size = UDim2.new(0, 100, 0, 100)
-		logoImage.ImageTransparency = 1
-		ts:Create(logoImage, TweenInfo.new(1), {
-			Size = UDim2.new(0, 400, 0, 400),
-			ImageTransparency = 0
-		}):Play()
-
+		JmodsIntroLogo.Position = UDim2.new(0.5,0,0.5,0)
+		ts:Create(JmodsIntroLogo, TweenInfo.new(0.6),
+			{Size=UDim2.new(0,400,0,400)}):Play()
 		task.wait(1.2)
-
-		for _, c in ipairs(clones) do
-			c:Destroy()
+	elseif tipo == 10 then
+		local clones = {}
+		for _, dir in ipairs({
+			Vector2.new(-1,-1), Vector2.new(1,-1),
+			Vector2.new(-1,1),  Vector2.new(1,1)
+		}) do
+			local c = JmodsIntroLogo:Clone()
+			c.Parent=JmodsIntroFrame; c.Position=UDim2.new(0.5,0,0.5,0)
+			c.Size=UDim2.new(0,400,0,400); c.ImageTransparency=0
+			table.insert(clones, c)
+			ts:Create(c, TweenInfo.new(0.5),
+				{Position=UDim2.new(0.5+dir.X,0,0.5+dir.Y,0), ImageTransparency=1}):Play()
 		end
+		task.wait(0.5)
+		JmodsIntroLogo.Position=UDim2.new(0.5,0,0.5,0)
+		JmodsIntroLogo.Size=UDim2.new(0,100,0,100)
+		JmodsIntroLogo.ImageTransparency=1
+		ts:Create(JmodsIntroLogo, TweenInfo.new(1),
+			{Size=UDim2.new(0,400,0,400), ImageTransparency=0}):Play()
+		task.wait(1.3)
+		for _, c in ipairs(clones) do c:Destroy() end
 	end
 
-	-- 🧼 Fade out común
-	ts:Create(introFrame, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
-	ts:Create(logoImage, TweenInfo.new(1), {ImageTransparency = 1}):Play()
-	task.wait(1)
-	introFrame:Destroy()
+	ts:Create(JmodsIntroLogo, TweenInfo.new(0.8), {ImageTransparency=1}):Play()
+	task.wait(0.9)
+	pcall(function() JmodsIntroFrame:Destroy() end)
 end
 
--- Ejecutar animación
-animacionInicioAleatoria()
+-- ============================================================
+-- FRAME PRINCIPAL — oculto hasta que acabe la intro
+-- ============================================================
+local JmodsMainFrame = Instance.new("Frame", JmodsGui)
+JmodsMainFrame.Name                   = "JmodsMainFrame"
+JmodsMainFrame.BackgroundColor3       = Color3.fromRGB(25,25,25)
+JmodsMainFrame.BackgroundTransparency = 0.2
+JmodsMainFrame.Active                 = true
+JmodsMainFrame.Visible                = false
+JmodsMainFrame.BorderSizePixel        = 0
+Instance.new("UICorner", JmodsMainFrame).CornerRadius = UDim.new(0,12)
 
-
-
-
-
-
-
-
--- Función para hacer frames draggeables en PC y móvil
-local function makeDraggable(frame, dragHandle)
-	local dragging = false
-	local dragInput, mousePos, framePos
-
-	local function update(input)
-		local delta = input.Position - mousePos
-		frame.Position = UDim2.new(
-			framePos.X.Scale, framePos.X.Offset + delta.X,
-			framePos.Y.Scale, framePos.Y.Offset + delta.Y
-		)
-	end
-
-	dragHandle.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			mousePos = input.Position
-			framePos = frame.Position
-			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then
-					dragging = false
-				end
-			end)
-		end
-	end)
-
-	dragHandle.InputChanged:Connect(function(input)
-		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-			update(input)
-		end
-	end)
-end
----Notificaciones
-
-local function showNotification(title, message, link)
-	local notifFrame = Instance.new("Frame", ScreenGui)
-	notifFrame.Size = UDim2.new(0, 300, 0, 100)
-	notifFrame.Position = UDim2.new(1, -310, 0, 20)
-	notifFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-	notifFrame.BackgroundTransparency = 0.2
-	notifFrame.ZIndex = 100
-	Instance.new("UICorner", notifFrame).CornerRadius = UDim.new(0, 12)
-
-	local gradient = Instance.new("UIGradient", notifFrame)
-	gradient.Color = ColorSequence.new{
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 120, 255)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 60, 90))
-	}
-	gradient.Rotation = 45
----Auto tamaño
-
-local UserInputService = game:GetService("UserInputService")
-
-
-	if isMobile then
-		notifFrame.Size = UDim2.new(0, 210, 0, 70)
-		notifFrame.Position = UDim2.new(1, -220, 0, 20)
-	else
-		notifFrame.Size = UDim2.new(0, 300, 0, 100)
-		notifFrame.Position = UDim2.new(1, -310, 0, 20)
-	end
-
-
-
-
-
-
-
-	local titleLabel = Instance.new("TextLabel", notifFrame)
-	titleLabel.Size = UDim2.new(1, -20, 0, 30)
-	titleLabel.Position = UDim2.new(0, 10, 0, 5)
-	titleLabel.Text = title
-	titleLabel.Font = Enum.Font.FredokaOne
-	titleLabel.TextSize = 20
-	titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	titleLabel.BackgroundTransparency = 1
-	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-	titleLabel.ZIndex = 101
-
-	local msgLabel = Instance.new("TextLabel", notifFrame)
-	msgLabel.Size = UDim2.new(1, -20, 0, 30)
-	msgLabel.Position = UDim2.new(0, 10, 0, 35)
-	msgLabel.Text = message
-	msgLabel.Font = Enum.Font.Gotham
-	msgLabel.TextSize = 16
-	msgLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-	msgLabel.BackgroundTransparency = 1
-	msgLabel.TextXAlignment = Enum.TextXAlignment.Left
-	msgLabel.ZIndex = 101
-
-	if link then
-		local linkBtn = Instance.new("TextButton", notifFrame)
-		linkBtn.Size = UDim2.new(1, -20, 0, 25)
-		linkBtn.Position = UDim2.new(0, 10, 0, 70)
-		linkBtn.Text = "YouTube"
-		linkBtn.Font = Enum.Font.GothamBold
-		linkBtn.TextSize = 14
-		linkBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-        linkBtn.BackgroundTransparency = 1
-		linkBtn.TextColor3 = Color3.fromRGB(0, 200, 255) 
-		linkBtn.ZIndex = 101
-		Instance.new("UICorner", linkBtn).CornerRadius = UDim.new(0, 6)
-
-		linkBtn.MouseButton1Click:Connect(function()
-			if setclipboard then
-				setclipboard(link)
-			end
-		end)
-	end
-
-	-- Animación de desaparición
-	task.delay(25, function()
-		for i = 1,10 do
-			notifFrame.BackgroundTransparency = notifFrame.BackgroundTransparency + 0.08
-			task.wait(0.05)
-		end
-		notifFrame:Destroy()
-	end)
-end
-
-
-
-
-
-
-
-
-
----Principal/inicio
-local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Size = UDim2.new(0, 520, 0, 430)
-MainFrame.Position = UDim2.new(0.5, -260, 0.5, -215)
-MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-
-
-
-local UserInputService = game:GetService("UserInputService")
-
-if UserInputService.TouchEnabled then
-	-- En móvil
-	MainFrame.Size = UDim2.new(0.45, 0, 0.85, 0)
-	MainFrame.Position = UDim2.new(0.275, 0, 0.075, 0)
+if isMobile then
+	JmodsMainFrame.Size     = UDim2.new(0,310,0,320)
+	JmodsMainFrame.Position = UDim2.new(0.5,-155,0.5,-160)
 else
-	-- PC
-	MainFrame.Size = UDim2.new(0, 520, 0, 430)
-	MainFrame.Position = UDim2.new(0.5, -260, 0.5, -215)
+	JmodsMainFrame.Size     = UDim2.new(0,520,0,430)
+	JmodsMainFrame.Position = UDim2.new(0.5,-260,0.5,-215)
 end
 
-
-
-
-
-
-
-
-MainFrame.Active = true
----MainFrame.Draggable = true
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
-
-
-
-
-
-
-
-local gradient = Instance.new("UIGradient", MainFrame)
-gradient.Color = ColorSequence.new{
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 120, 255)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 60, 90))
+local _mainGrad = Instance.new("UIGradient", JmodsMainFrame)
+_mainGrad.Color = ColorSequence.new{
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(60,120,255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(255,60,90))
 }
-gradient.Rotation = 45
+_mainGrad.Rotation = 45
 
-local Title = Instance.new("TextLabel", MainFrame)
-Title.Size = UDim2.new(1, -20, 0, 40)
-Title.Position = UDim2.new(0, 10, 0, 0)
-Title.BackgroundTransparency = 1
-Title.Text = "🔍 Scripts - Jmods"
-Title.Font = Enum.Font.FredokaOne
-Title.TextSize = 26
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextXAlignment = Enum.TextXAlignment.Left
-makeDraggable(MainFrame, Title)
+-- ============================================================
+-- CABECERA
+-- ============================================================
+local JmodsTitleLabel = Instance.new("TextLabel", JmodsMainFrame)
+JmodsTitleLabel.Name                   = "JmodsTitleLabel"
+JmodsTitleLabel.Size                   = UDim2.new(1,-20,0,40)
+JmodsTitleLabel.Position               = UDim2.new(0,10,0,0)
+JmodsTitleLabel.BackgroundTransparency = 1
+JmodsTitleLabel.Text                   = "🔍 Scripts - Jmods"
+JmodsTitleLabel.Font                   = Enum.Font.FredokaOne
+JmodsTitleLabel.TextSize               = 26
+JmodsTitleLabel.TextColor3             = Color3.fromRGB(255,255,255)
+JmodsTitleLabel.TextXAlignment         = Enum.TextXAlignment.Left
+makeDraggable(JmodsMainFrame, JmodsTitleLabel)
 
+local JmodsLogoIcon = Instance.new("ImageLabel", JmodsMainFrame)
+JmodsLogoIcon.Name                   = "JmodsLogoIcon"
+JmodsLogoIcon.Size                   = UDim2.new(0,50,0,50)
+JmodsLogoIcon.Position               = UDim2.new(0,200,0,-7)
+JmodsLogoIcon.BackgroundTransparency = 1
+JmodsLogoIcon.Image                  = "rbxassetid://128308831323216"
+JmodsLogoIcon.ScaleType              = Enum.ScaleType.Fit
+JmodsLogoIcon.ZIndex                 = 2
 
+local JmodsCloseBtn = Instance.new("TextButton", JmodsMainFrame)
+JmodsCloseBtn.Name             = "JmodsCloseBtn"
+JmodsCloseBtn.Size             = UDim2.new(0,30,0,30)
+JmodsCloseBtn.Position         = UDim2.new(1,-35,0,5)
+JmodsCloseBtn.Text             = "X"
+JmodsCloseBtn.Font             = Enum.Font.GothamBlack
+JmodsCloseBtn.TextSize         = 20
+JmodsCloseBtn.BackgroundColor3 = Color3.fromRGB(170,50,50)
+JmodsCloseBtn.TextColor3       = Color3.fromRGB(255,255,255)
+Instance.new("UICorner", JmodsCloseBtn).CornerRadius = UDim.new(0,6)
 
-local Logo = Instance.new("ImageLabel", MainFrame)
-Logo.Size = UDim2.new(0, 50, 0, 50)
-Logo.Position = UDim2.new(0, 200, 0, -7)
-Logo.BackgroundTransparency = 1
-Logo.Image = "rbxassetid://128308831323216"
-Logo.ScaleType = Enum.ScaleType.Fit
-Logo.ZIndex = Title.ZIndex + 1
+local JmodsMinBtn = Instance.new("TextButton", JmodsMainFrame)
+JmodsMinBtn.Name             = "JmodsMinBtn"
+JmodsMinBtn.Size             = UDim2.new(0,30,0,30)
+JmodsMinBtn.Position         = UDim2.new(1,-70,0,5)
+JmodsMinBtn.Text             = "—"
+JmodsMinBtn.Font             = Enum.Font.GothamBlack
+JmodsMinBtn.TextSize         = 20
+JmodsMinBtn.BackgroundColor3 = Color3.fromRGB(45,45,45)
+JmodsMinBtn.TextColor3       = Color3.fromRGB(255,255,255)
+Instance.new("UICorner", JmodsMinBtn).CornerRadius = UDim.new(0,6)
 
+local JmodsConfigBtn = Instance.new("TextButton", JmodsMainFrame)
+JmodsConfigBtn.Name             = "JmodsConfigBtn"
+JmodsConfigBtn.Size             = UDim2.new(0,30,0,30)
+JmodsConfigBtn.Position         = UDim2.new(1,-105,0,5)
+JmodsConfigBtn.Text             = "⚙️"
+JmodsConfigBtn.Font             = Enum.Font.GothamBold
+JmodsConfigBtn.TextSize         = 18
+JmodsConfigBtn.BackgroundColor3 = Color3.fromRGB(45,45,45)
+JmodsConfigBtn.TextColor3       = Color3.fromRGB(255,255,255)
+Instance.new("UICorner", JmodsConfigBtn).CornerRadius = UDim.new(0,6)
 
+local JmodsTrendBtn = Instance.new("TextButton", JmodsMainFrame)
+JmodsTrendBtn.Name             = "JmodsTrendBtn"
+JmodsTrendBtn.Size             = UDim2.new(0,30,0,30)
+JmodsTrendBtn.Position         = UDim2.new(1,-140,0,5)
+JmodsTrendBtn.Text             = "📈"
+JmodsTrendBtn.Font             = Enum.Font.GothamBold
+JmodsTrendBtn.TextSize         = 18
+JmodsTrendBtn.BackgroundColor3 = Color3.fromRGB(45,45,45)
+JmodsTrendBtn.TextColor3       = Color3.fromRGB(255,255,255)
+Instance.new("UICorner", JmodsTrendBtn).CornerRadius = UDim.new(0,6)
 
+-- ============================================================
+-- BÚSQUEDA
+-- ============================================================
+local JmodsSearchBox = Instance.new("TextBox", JmodsMainFrame)
+JmodsSearchBox.Name             = "JmodsSearchBox"
+JmodsSearchBox.Size             = UDim2.new(0.7,-10,0,32)
+JmodsSearchBox.Position         = UDim2.new(0,10,0,50)
+JmodsSearchBox.PlaceholderText  = "Buscar script..."
+JmodsSearchBox.Text             = ""
+JmodsSearchBox.Font             = Enum.Font.Gotham
+JmodsSearchBox.TextSize         = 18
+JmodsSearchBox.BackgroundColor3 = Color3.fromRGB(40,40,40)
+JmodsSearchBox.TextColor3       = Color3.fromRGB(255,255,255)
+JmodsSearchBox.ClearTextOnFocus = false
+Instance.new("UICorner", JmodsSearchBox).CornerRadius = UDim.new(0,6)
 
+local JmodsSearchBtn = Instance.new("TextButton", JmodsMainFrame)
+JmodsSearchBtn.Name             = "JmodsSearchBtn"
+JmodsSearchBtn.Size             = UDim2.new(0.3,-10,0,32)
+JmodsSearchBtn.Position         = UDim2.new(0.7,0,0,50)
+JmodsSearchBtn.Text             = "Buscar"
+JmodsSearchBtn.Font             = Enum.Font.GothamBold
+JmodsSearchBtn.TextSize         = 18
+JmodsSearchBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+JmodsSearchBtn.TextColor3       = Color3.fromRGB(255,255,255)
+Instance.new("UICorner", JmodsSearchBtn).CornerRadius = UDim.new(0,6)
 
+-- ============================================================
+-- SCROLL DE RESULTADOS
+-- ============================================================
+local JmodsResultsScroll = Instance.new("ScrollingFrame", JmodsMainFrame)
+JmodsResultsScroll.Name                   = "JmodsResultsScroll"
+JmodsResultsScroll.Position               = UDim2.new(0,10,0,88)
+JmodsResultsScroll.Size                   = UDim2.new(1,-20,1,-98)
+JmodsResultsScroll.CanvasSize             = UDim2.new(0,0,0,0)
+JmodsResultsScroll.BackgroundTransparency = 0.3
+JmodsResultsScroll.BackgroundColor3       = Color3.fromRGB(35,35,35)
+JmodsResultsScroll.BorderSizePixel        = 0
+JmodsResultsScroll.ScrollBarThickness     = 6
+Instance.new("UICorner", JmodsResultsScroll).CornerRadius = UDim.new(0,8)
 
+local _resultsLayout = Instance.new("UIListLayout", JmodsResultsScroll)
+_resultsLayout.Padding   = UDim.new(0,6)
+_resultsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+local _resultsPad = Instance.new("UIPadding", JmodsResultsScroll)
+_resultsPad.PaddingTop  = UDim.new(0,4)
+_resultsPad.PaddingLeft = UDim.new(0,3)
 
-local MinBtn = Instance.new("TextButton", MainFrame)
-MinBtn.Size = UDim2.new(0, 30, 0, 30)
-MinBtn.Position = UDim2.new(1, -70, 0, 5)
-MinBtn.Text = "-"
-MinBtn.Font = Enum.Font.GothamBlack
-MinBtn.TextSize = 20
-MinBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-MinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
+-- ============================================================
+-- FONDO PERSONALIZABLE
+-- ============================================================
+local JmodsBgImage = Instance.new("ImageLabel", JmodsMainFrame)
+JmodsBgImage.Name                   = "JmodsBgImage"
+JmodsBgImage.Size                   = UDim2.new(1,0,1,0)
+JmodsBgImage.Position               = UDim2.new(0,0,0,0)
+JmodsBgImage.ZIndex                 = -10
+JmodsBgImage.BackgroundTransparency = 1
+JmodsBgImage.ImageTransparency      = 0.5
+JmodsBgImage.ScaleType              = Enum.ScaleType.Crop
+JmodsBgImage.Visible                = false
+Instance.new("UICorner", JmodsBgImage).CornerRadius = UDim.new(0,12)
 
---  Cerrar
-local CloseBtn = Instance.new("TextButton", MainFrame)
-CloseBtn.Size = UDim2.new(0, 30, 0, 30)
-CloseBtn.Position = UDim2.new(1, -35, 0, 5)
-CloseBtn.Text = "X"
-CloseBtn.Font = Enum.Font.GothamBlack
-CloseBtn.TextSize = 20
-CloseBtn.BackgroundColor3 = Color3.fromRGB(170, 50, 50)
-CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
+-- ============================================================
+-- TRANSPARENCIA GLOBAL
+-- Afecta: MainFrame, scroll, los 4 botones de cabecera,
+-- searchbox, searchbtn, todos los ítems ya creados.
+-- ============================================================
+local currentTransparency = tonumber(userConfig.transparency) or 0.2
 
-
------Animacion de iniciowe
-MainFrame.BackgroundTransparency = 1
-for _, v in ipairs(MainFrame:GetDescendants()) do
-	if v:IsA("Frame") or v:IsA("TextLabel") or v:IsA("TextButton") or v:IsA("ScrollingFrame") or v:IsA("ImageLabel") then
-		v.Visible = false
-	end
-end
-
--- Fade in animación
-game:GetService("TweenService"):Create(MainFrame, TweenInfo.new(1), {BackgroundTransparency = 0.2}):Play()
-task.wait(0.3)
-
-for _, v in ipairs(MainFrame:GetDescendants()) do
-	if v:IsA("Frame") or v:IsA("TextLabel") or v:IsA("TextButton") or v:IsA("ScrollingFrame") or v:IsA("ImageLabel") then
-		v.Visible = true
-		if v:IsA("Frame") then
-			v.BackgroundTransparency = 1
-			game:GetService("TweenService"):Create(v, TweenInfo.new(0.5), {BackgroundTransparency = 0.2}):Play()
-		elseif v:IsA("TextLabel") or v:IsA("TextButton") then
-			v.TextTransparency = 1
-			game:GetService("TweenService"):Create(v, TweenInfo.new(0.5), {TextTransparency = 0}):Play()
-		elseif v:IsA("ImageLabel") then
-			v.ImageTransparency = 1
-			game:GetService("TweenService"):Create(v, TweenInfo.new(0.5), {ImageTransparency = 0}):Play()
+local function applyTransparency(val)
+	currentTransparency = val
+	JmodsMainFrame.BackgroundTransparency     = val
+	JmodsResultsScroll.BackgroundTransparency = math.min(1, val + 0.1)
+	JmodsCloseBtn.BackgroundTransparency      = val
+	JmodsMinBtn.BackgroundTransparency        = val
+	JmodsConfigBtn.BackgroundTransparency     = val
+	JmodsTrendBtn.BackgroundTransparency      = val
+	JmodsSearchBox.BackgroundTransparency     = math.min(1, val + 0.05)
+	JmodsSearchBtn.BackgroundTransparency     = val
+	for _, child in ipairs(JmodsResultsScroll:GetChildren()) do
+		if child:IsA("Frame") then
+			child.BackgroundTransparency = math.min(1, val + 0.1)
 		end
 	end
 end
-------
 
+-- ============================================================
+-- PANEL CONFIG — slider + imagen de fondo
+-- ============================================================
+local JmodsConfigPanel = Instance.new("Frame", JmodsMainFrame)
+JmodsConfigPanel.Name                   = "JmodsConfigPanel"
+JmodsConfigPanel.Size                   = UDim2.new(1,-20,0,130)
+JmodsConfigPanel.Position               = UDim2.new(0,10,1,-140)
+JmodsConfigPanel.BackgroundColor3       = Color3.fromRGB(30,30,30)
+JmodsConfigPanel.BackgroundTransparency = 0.15
+JmodsConfigPanel.Visible                = false
+JmodsConfigPanel.ZIndex                 = 50
+JmodsConfigPanel.BorderSizePixel        = 0
+Instance.new("UICorner", JmodsConfigPanel).CornerRadius = UDim.new(0,8)
 
+local JmodsConfigTitle = Instance.new("TextLabel", JmodsConfigPanel)
+JmodsConfigTitle.Name                   = "JmodsConfigTitle"
+JmodsConfigTitle.Size                   = UDim2.new(1,0,0,22)
+JmodsConfigTitle.Position               = UDim2.new(0,8,0,4)
+JmodsConfigTitle.Text                   = "⚙️  Personalización"
+JmodsConfigTitle.Font                   = Enum.Font.GothamBold
+JmodsConfigTitle.TextSize               = 14
+JmodsConfigTitle.TextColor3             = Color3.fromRGB(255,255,255)
+JmodsConfigTitle.BackgroundTransparency = 1
+JmodsConfigTitle.ZIndex                 = 51
 
+local JmodsBgIdInput = Instance.new("TextBox", JmodsConfigPanel)
+JmodsBgIdInput.Name             = "JmodsBgIdInput"
+JmodsBgIdInput.Size             = UDim2.new(1,-20,0,24)
+JmodsBgIdInput.Position         = UDim2.new(0,10,0,28)
+JmodsBgIdInput.PlaceholderText  = "ID de imagen de fondo (opcional)"
+JmodsBgIdInput.Font             = Enum.Font.Gotham
+JmodsBgIdInput.TextSize         = 13
+JmodsBgIdInput.BackgroundColor3 = Color3.fromRGB(45,45,45)
+JmodsBgIdInput.TextColor3       = Color3.fromRGB(255,255,255)
+JmodsBgIdInput.Text             = ""
+JmodsBgIdInput.ClearTextOnFocus = false
+JmodsBgIdInput.ZIndex           = 51
+Instance.new("UICorner", JmodsBgIdInput).CornerRadius = UDim.new(0,5)
 
+-- Etiqueta del slider
+local JmodsSliderLabel = Instance.new("TextLabel", JmodsConfigPanel)
+JmodsSliderLabel.Name                   = "JmodsSliderLabel"
+JmodsSliderLabel.Size                   = UDim2.new(1,-20,0,18)
+JmodsSliderLabel.Position               = UDim2.new(0,10,0,57)
+JmodsSliderLabel.Text                   = "🔆 Transparencia: "..string.format("%.0f%%", currentTransparency*100)
+JmodsSliderLabel.Font                   = Enum.Font.Gotham
+JmodsSliderLabel.TextSize               = 12
+JmodsSliderLabel.TextColor3             = Color3.fromRGB(220,220,220)
+JmodsSliderLabel.BackgroundTransparency = 1
+JmodsSliderLabel.TextXAlignment         = Enum.TextXAlignment.Left
+JmodsSliderLabel.ZIndex                 = 51
 
-local ConfigBtn = Instance.new("TextButton", MainFrame)
-ConfigBtn.Size = UDim2.new(0, 30, 0, 30)
-ConfigBtn.Position = UDim2.new(1, -105, 0, 5)
-ConfigBtn.Text = "⚙️"
-ConfigBtn.Font = Enum.Font.GothamBold
-ConfigBtn.TextSize = 18
-ConfigBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-ConfigBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-Instance.new("UICorner", ConfigBtn).CornerRadius = UDim.new(0, 6)
+-- Track del slider
+local JmodsSliderTrack = Instance.new("Frame", JmodsConfigPanel)
+JmodsSliderTrack.Name                   = "JmodsSliderTrack"
+JmodsSliderTrack.Size                   = UDim2.new(1,-20,0,12)
+JmodsSliderTrack.Position               = UDim2.new(0,10,0,78)
+JmodsSliderTrack.BackgroundColor3       = Color3.fromRGB(55,55,55)
+JmodsSliderTrack.BorderSizePixel        = 0
+JmodsSliderTrack.ZIndex                 = 51
+Instance.new("UICorner", JmodsSliderTrack).CornerRadius = UDim.new(0,6)
 
+-- Fill del slider (barra coloreada)
+local JmodsSliderFill = Instance.new("Frame", JmodsSliderTrack)
+JmodsSliderFill.Name                   = "JmodsSliderFill"
+JmodsSliderFill.Size                   = UDim2.new(currentTransparency/0.9, 0, 1, 0)
+JmodsSliderFill.BackgroundColor3       = Color3.fromRGB(60,120,255)
+JmodsSliderFill.BorderSizePixel        = 0
+JmodsSliderFill.ZIndex                 = 52
+Instance.new("UICorner", JmodsSliderFill).CornerRadius = UDim.new(0,6)
+local _fillGrad = Instance.new("UIGradient", JmodsSliderFill)
+_fillGrad.Color = ColorSequence.new{
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(60,120,255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(255,60,90))
+}
 
+-- Handle del slider (bolita blanca arrastrable)
+local JmodsSliderHandle = Instance.new("TextButton", JmodsSliderTrack)
+JmodsSliderHandle.Name                   = "JmodsSliderHandle"
+JmodsSliderHandle.Size                   = UDim2.new(0,20,0,20)
+JmodsSliderHandle.AnchorPoint            = Vector2.new(0.5,0.5)
+JmodsSliderHandle.Position               = UDim2.new(currentTransparency/0.9, 0, 0.5, 0)
+JmodsSliderHandle.BackgroundColor3       = Color3.fromRGB(255,255,255)
+JmodsSliderHandle.Text                   = ""
+JmodsSliderHandle.BorderSizePixel        = 0
+JmodsSliderHandle.ZIndex                 = 53
+Instance.new("UICorner", JmodsSliderHandle).CornerRadius = UDim.new(0.5,0)
 
-
-
-
-
----Recientes/Tendencia
--- 💡 Nota "más usados →" encima del botón Trading
-local tipLabel = Instance.new("TextLabel", MainFrame)
-tipLabel.Size = UDim2.new(0, 120, 0, 20)
-tipLabel.Position = UDim2.new(1, -270, 0, 10) 
-tipLabel.Text = "más usados →"
-tipLabel.Font = Enum.Font.Fondamento -- manuscrito bonito (cambia si no tienes ese)
-tipLabel.TextSize = 14
-tipLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-tipLabel.BackgroundTransparency = 1
-tipLabel.TextXAlignment = Enum.TextXAlignment.Right
-tipLabel.TextYAlignment = Enum.TextYAlignment.Center
-tipLabel.ZIndex = 99
-
-
-task.delay(120, function()
-	if tipLabel then
-		tipLabel:Destroy()
+-- Lógica drag del slider
+local _sliderDragging = false
+local function updateSlider(inputPos)
+	local tp  = JmodsSliderTrack.AbsolutePosition
+	local ts2 = JmodsSliderTrack.AbsoluteSize
+	local rel = math.clamp((inputPos.X - tp.X) / ts2.X, 0, 1)
+	local val = rel * 0.9
+	JmodsSliderFill.Size       = UDim2.new(rel,0,1,0)
+	JmodsSliderHandle.Position = UDim2.new(rel,0,0.5,0)
+	JmodsSliderLabel.Text      = "🔆 Transparencia: "..string.format("%.0f%%", val*100)
+	applyTransparency(val)
+	userConfig.transparency = val
+	saveConfig()
+end
+JmodsSliderHandle.InputBegan:Connect(function(inp)
+	if inp.UserInputType==Enum.UserInputType.MouseButton1
+	or inp.UserInputType==Enum.UserInputType.Touch then _sliderDragging=true end
+end)
+JmodsSliderTrack.InputBegan:Connect(function(inp)
+	if inp.UserInputType==Enum.UserInputType.MouseButton1
+	or inp.UserInputType==Enum.UserInputType.Touch then
+		_sliderDragging=true; updateSlider(inp.Position)
 	end
 end)
+UserInputService.InputChanged:Connect(function(inp)
+	if _sliderDragging and (inp.UserInputType==Enum.UserInputType.MouseMovement
+	or inp.UserInputType==Enum.UserInputType.Touch) then updateSlider(inp.Position) end
+end)
+UserInputService.InputEnded:Connect(function(inp)
+	if inp.UserInputType==Enum.UserInputType.MouseButton1
+	or inp.UserInputType==Enum.UserInputType.Touch then _sliderDragging=false end
+end)
 
+local JmodsConfigHint = Instance.new("TextLabel", JmodsConfigPanel)
+JmodsConfigHint.Name                   = "JmodsConfigHint"
+JmodsConfigHint.Size                   = UDim2.new(1,-20,0,14)
+JmodsConfigHint.Position               = UDim2.new(0,10,0,100)
+JmodsConfigHint.Text                   = "Arrastra el slider  •  Enter para aplicar imagen"
+JmodsConfigHint.Font                   = Enum.Font.Gotham
+JmodsConfigHint.TextSize               = 10
+JmodsConfigHint.TextColor3             = Color3.fromRGB(140,140,140)
+JmodsConfigHint.BackgroundTransparency = 1
+JmodsConfigHint.ZIndex                 = 51
 
+-- ============================================================
+-- PANEL TRENDING
+-- FIX CENTRADO: AnchorPoint=(0,0.5) + Y=mPos.Y+mSize.Y*0.5
+-- El AnchorPoint Y=0.5 hace que el panel use su centro como
+-- referencia, entonces al darle Y=centro del MainFrame queda
+-- perfectamente alineado verticalmente.
+-- repositionTrending() se llama DESPUÉS del fade-in para que
+-- MainFrame ya tenga AbsoluteSize real (no 0,0).
+-- ============================================================
+local trendingGap = 8
+local trendingW   = isMobile and 185 or 285
 
+local JmodsTrendPanel = Instance.new("Frame", JmodsGui)
+JmodsTrendPanel.Name                   = "JmodsTrendPanel"
+JmodsTrendPanel.BackgroundTransparency = 1
+JmodsTrendPanel.BorderSizePixel        = 0
+JmodsTrendPanel.Visible                = false
+JmodsTrendPanel.ZIndex                 = 60
+JmodsTrendPanel.AnchorPoint            = Vector2.new(0, 0.5)
 
-local RecentsBtn = Instance.new("TextButton", MainFrame)
-RecentsBtn.Size = UDim2.new(0, 30, 0, 30)
-RecentsBtn.Position = UDim2.new(1, -140, 0, 5) -- A la izquierda de Config
-RecentsBtn.Text = "📈"
-RecentsBtn.Font = Enum.Font.GothamBold
-RecentsBtn.TextSize = 18
-RecentsBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-RecentsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-Instance.new("UICorner", RecentsBtn).CornerRadius = UDim.new(0, 6)
+local function repositionTrending()
+	local mPos  = JmodsMainFrame.AbsolutePosition
+	local mSize = JmodsMainFrame.AbsoluteSize
+	JmodsTrendPanel.Position = UDim2.new(
+		0, mPos.X + mSize.X + trendingGap,
+		0, mPos.Y + mSize.Y * 0.5
+	)
+	JmodsTrendPanel.Size = UDim2.new(0, trendingW, 0, mSize.Y)
+end
 
+JmodsMainFrame:GetPropertyChangedSignal("AbsolutePosition"):Connect(repositionTrending)
+JmodsMainFrame:GetPropertyChangedSignal("AbsoluteSize"):Connect(repositionTrending)
 
+local JmodsTrendScroll = Instance.new("ScrollingFrame", JmodsTrendPanel)
+JmodsTrendScroll.Name                   = "JmodsTrendScroll"
+JmodsTrendScroll.Size                   = UDim2.new(1,0,1,0)
+JmodsTrendScroll.Position               = UDim2.new(0,0,0,0)
+JmodsTrendScroll.CanvasSize             = UDim2.new(0,0,0,0)
+JmodsTrendScroll.ScrollBarThickness     = 4
+JmodsTrendScroll.BackgroundTransparency = 1
+JmodsTrendScroll.ZIndex                 = 61
+JmodsTrendScroll.Active                 = true
 
+local _trendLayout = Instance.new("UIListLayout", JmodsTrendScroll)
+_trendLayout.Padding   = UDim.new(0,5)
+_trendLayout.SortOrder = Enum.SortOrder.LayoutOrder
+local _trendPad = Instance.new("UIPadding", JmodsTrendScroll)
+_trendPad.PaddingTop    = UDim.new(0,4)
+_trendPad.PaddingBottom = UDim.new(0,4)
+_trendPad.PaddingLeft   = UDim.new(0,2)
+_trendPad.PaddingRight  = UDim.new(0,2)
 
-
--- 🔳 Frame de recientes (encima)
-local RecentsFrame = Instance.new("Frame", MainFrame)
-RecentsFrame.Size = UDim2.new(1, -20, 1, -100)
-RecentsFrame.Position = UDim2.new(0, 10, 0, 90)
-RecentsFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-RecentsFrame.BackgroundTransparency = 0.2
-RecentsFrame.Visible = false
-RecentsFrame.ZIndex = 100
-RecentsFrame.Active = true -- ✅ importante
-Instance.new("UICorner", RecentsFrame).CornerRadius = UDim.new(0, 8)
-
-
-
-
-
-
-
-local RecentsScroll = Instance.new("ScrollingFrame", RecentsFrame)
-RecentsScroll.Size = UDim2.new(1, 0, 1, 0)
-RecentsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-RecentsScroll.ScrollBarThickness = 6
-RecentsScroll.BackgroundTransparency = 1
-RecentsScroll.ZIndex = 101
-RecentsScroll.Active = true -- ✅ importante
-
-
-
-
-local RecentsLayout = Instance.new("UIListLayout", RecentsScroll)
-RecentsLayout.Padding = UDim.new(0, 6)
-
--- 🔥 Mostrar scripts recientes de ScriptBlox
-local cachedTrending = nil
-
-local function showRecentsFromScriptBlox()
-	for _, child in ipairs(RecentsScroll:GetChildren()) do
-		if child:IsA("Frame") then child:Destroy() end
-	end
-
-	local scripts
-
-
-if cachedTrending then
-		scripts = cachedTrending
-	else
-		local url = "https://scriptblox.com/api/script/trending"
-		local response = request({
-			Url = url,
-			Method = "GET",
-			Headers = {["Content-Type"] = "application/json"}
-		})
-
-		if response and response.Body then
-			local success, data = pcall(function()
-				return HttpService:JSONDecode(response.Body)
-			end)
-
-			if success and data and data.result and data.result.scripts then
-				scripts = data.result.scripts
-				cachedTrending = scripts -- guardar en caché
-			end
-		end
-	end
-
-	if not scripts then
-		local fail = Instance.new("TextLabel", RecentsScroll)
-		fail.Size = UDim2.new(1, 0, 0, 40)
-		fail.Text = "❌ No se pudo cargar trending"
-		fail.TextColor3 = Color3.new(1, 1, 1)
-		fail.BackgroundTransparency = 1
-		return
-	end
-
-	-- Mostrar scripts
-
-			-- Mostrar máximo 5
-			for i = 1, math.min(40, #scripts) do
-				local script = scripts[i]
-
-				local Item = Instance.new("Frame", RecentsScroll)
-				Item.Size = UDim2.new(1, -10, 0, 80)
-				Item.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-				Item.BackgroundTransparency = 0.2
-				Item.ZIndex = 6
-				Instance.new("UICorner", Item).CornerRadius = UDim.new(0, 8)
-
-				local nameLabel = Instance.new("TextLabel", Item)
-				nameLabel.Text = "🎮 " .. script.title
-				nameLabel.Size = UDim2.new(1, -20, 0, 26)
-				nameLabel.Position = UDim2.new(0, 10, 0, 6)
-				nameLabel.Font = Enum.Font.GothamMedium
-				nameLabel.TextSize = 16
-				nameLabel.TextColor3 = Color3.new(1, 1, 1)
-				nameLabel.BackgroundTransparency = 1
-				nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-				nameLabel.ZIndex = 7
-
-				local gameLabel = Instance.new("TextLabel", Item)
-				
-                
-                
-                gameLabel.Text = "📜 " .. (script.game and script.game.name or "Universal")
-				
-                
-                
-                
-                gameLabel.Size = UDim2.new(1, -20, 0, 20)
-				gameLabel.Position = UDim2.new(0, 10, 0, 34)
-				gameLabel.Font = Enum.Font.Gotham
-				gameLabel.TextSize = 14
-				gameLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-				gameLabel.BackgroundTransparency = 1
-				gameLabel.TextXAlignment = Enum.TextXAlignment.Left
-				gameLabel.ZIndex = 7
-
-
-
-local viewsLabel = Instance.new("TextLabel", Item)
-viewsLabel.Text = "👁️ " .. tostring(script.views or 0) .. " Ejecuciones/vistas"
-viewsLabel.Size = UDim2.new(1, -20, 0, 20)
-viewsLabel.Position = UDim2.new(0, 10, 0, 54)
-viewsLabel.Font = Enum.Font.Gotham
-viewsLabel.TextSize = 14
-viewsLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-viewsLabel.BackgroundTransparency = 1
-viewsLabel.TextXAlignment = Enum.TextXAlignment.Left
-viewsLabel.ZIndex = 7
-
-
-
-
-
-
-
-
-				local executeBtn = Instance.new("TextButton", Item)
-				executeBtn.Size = UDim2.new(0, 100, 0, 25)
-				executeBtn.Position = UDim2.new(1, -210, 1, -28)
-				executeBtn.Text = "Ejecutar"
-				executeBtn.Font = Enum.Font.Gotham
-				executeBtn.TextSize = 14
-				executeBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 180)
-				executeBtn.TextColor3 = Color3.new(1, 1, 1)
-				executeBtn.ZIndex = 7
-				Instance.new("UICorner", executeBtn).CornerRadius = UDim.new(0, 5)
-
-				local copyBtn = Instance.new("TextButton", Item)
-				copyBtn.Size = UDim2.new(0, 100, 0, 25)
-				copyBtn.Position = UDim2.new(1, -105, 1, -28)
-				copyBtn.Text = "Copiar"
-				copyBtn.Font = Enum.Font.Gotham
-				copyBtn.TextSize = 14
-				copyBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-				copyBtn.TextColor3 = Color3.new(1, 1, 1)
-				copyBtn.ZIndex = 7
-				Instance.new("UICorner", copyBtn).CornerRadius = UDim.new(0, 5)
-
-				-- Ejecutar
+-- ============================================================
+-- FETCH / RUN
+-- ============================================================
 local function fetchRawScript(url)
-	local response = request({
-		Url = url,
-		Method = "GET",
-		Headers = { ["Content-Type"] = "application/json" }
-	})
-
-	if response and response.Body then
-		local success, data = pcall(function()
-			return HttpService:JSONDecode(response.Body)
-		end)
-
-		if success and typeof(data) == "table" then
-			-- Respuesta esperada para recientes: { result = "código..." }
-			if data.result and typeof(data.result) == "string" then
-				return data.result
-			end
-			-- Respuesta esperada para buscador: tabla con más info
-			return data
-		end
-
-		-- Si no es JSON válido, probablemente sea un string plano ejecutable
-		return response.Body
-	end
-
-	return nil
-end
-
--- EJECUTAR (RECENTES)
-executeBtn.MouseButton1Click:Connect(function()
---	print("🟠 Ejecutar script reciente:", script.slug)
-
-	local url = "https://scriptblox.com/api/script/raw/" .. script.slug
-	local raw = fetchRawScript(url)
-
-	if not raw then
-	--	warn("❌ No se pudo obtener el script (nil)")
-		return
-	end
-
-	local code = (typeof(raw) == "table" and raw.result) or raw
-
-	if not code or typeof(code) ~= "string" then
-		--warn("⚠️ Código inválido o no es string")
-		return
-	end
-
-	local func, err = loadstring and loadstring(code) or load(code)
-	if func then
-		local success, execErr = pcall(func)
-		if not success then
-		--	warn("❌ Error en ejecución:", execErr)
-		end
-	else
-	--	warn("❌ Error en compilación:", err)
-	end
-end)
-
--- COPIAR (RECENTES)
-copyBtn.MouseButton1Click:Connect(function()
-	local url = "https://scriptblox.com/api/script/raw/" .. script.slug
-	local raw = fetchRawScript(url)
-
-	if not raw then
---		warn("❌ No se pudo obtener el script (nil)")
-		return
-	end
-
-	local code = (typeof(raw) == "table" and raw.result) or raw
-
---	print("🔍 Tipo de code:", typeof(code))
-	if typeof(code) == "string" then
-		if setclipboard then
-			setclipboard(code)
-	--		print("📋 Script copiado exitosamente.")
-		else
-	--		warn("⚠️ Tu exploit no soporta setclipboard.")
-		end
-	else
-	--	warn("⚠️ El script recibido no es string, es:", typeof(code))
-	end
-end)
-
-
-end
-			RecentsScroll.CanvasSize = UDim2.new(0, 0, 0, RecentsLayout.AbsoluteContentSize.Y + 10)
-		end
-
-
--- 🔘 Conectar botón
-RecentsBtn.MouseButton1Click:Connect(function()
-	RecentsFrame.Visible = not RecentsFrame.Visible
-	if RecentsFrame.Visible then
-		showRecentsFromScriptBlox()
-	end
-end)
----
-
-
-
-
-
-
-
-
-
-
-
-
-local SearchBox = Instance.new("TextBox", MainFrame)
-SearchBox.Size = UDim2.new(0.7, -10, 0, 32)
-SearchBox.Position = UDim2.new(0, 10, 0, 50)
-SearchBox.PlaceholderText = "Buscar script..."
-SearchBox.Text = ""
-SearchBox.Font = Enum.Font.Gotham
-SearchBox.TextSize = 18
-SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-SearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-Instance.new("UICorner", SearchBox).CornerRadius = UDim.new(0, 6)
-
-local SearchButton = Instance.new("TextButton", MainFrame)
-SearchButton.Size = UDim2.new(0.3, -10, 0, 32)
-SearchButton.Position = UDim2.new(0.7, 0, 0, 50)
-SearchButton.Text = "Buscar"
-SearchButton.Font = Enum.Font.GothamBold
-SearchButton.TextSize = 18
-SearchButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-SearchButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-Instance.new("UICorner", SearchButton).CornerRadius = UDim.new(0, 6)
-
-local ResultsFrame = Instance.new("ScrollingFrame", MainFrame)
-ResultsFrame.Position = UDim2.new(0, 10, 0, 90)
-ResultsFrame.Size = UDim2.new(1, -20, 1, -100)
-ResultsFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-ResultsFrame.BackgroundTransparency = 0.3
-ResultsFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-ResultsFrame.BorderSizePixel = 0
-ResultsFrame.ScrollBarThickness = 6
-
-local UIListLayout = Instance.new("UIListLayout", ResultsFrame)
-UIListLayout.Padding = UDim.new(0, 6)
-
-
-local ConfigFrame = Instance.new("Frame", MainFrame)
-ConfigFrame.Size = UDim2.new(1, -20, 0, 120)
-ConfigFrame.Position = UDim2.new(0, 10, 1, -130)
-ConfigFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-ConfigFrame.Visible = false
-Instance.new("UICorner", ConfigFrame).CornerRadius = UDim.new(0, 8)
-
-
-
-local configLabel = Instance.new("TextLabel", ConfigFrame)
-configLabel.Size = UDim2.new(1, 0, 0, 24)
-configLabel.Position = UDim2.new(0, 0, 0, 0)
-configLabel.Text = "Cambia tus cosas"
-configLabel.Font = Enum.Font.GothamBold
-configLabel.TextSize = 16
-configLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-configLabel.BackgroundTransparency = 1
-
-
-local bgInput = Instance.new("TextBox", ConfigFrame)
-bgInput.Size = UDim2.new(1, -20, 0, 24)
-bgInput.Position = UDim2.new(0, 10, 0, 30)
-bgInput.PlaceholderText = "ID De imagen"
-bgInput.Font = Enum.Font.Gotham
-bgInput.TextSize = 14
-bgInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-bgInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-bgInput.Text = ""
-Instance.new("UICorner", bgInput).CornerRadius = UDim.new(0, 5)
-
-
-local transparencyInput = Instance.new("TextBox", ConfigFrame)
-transparencyInput.Size = UDim2.new(1, -20, 0, 24)
-transparencyInput.Position = UDim2.new(0, 10, 0, 60)
-transparencyInput.PlaceholderText = "Transparencia 0 - 0.9"
-transparencyInput.Font = Enum.Font.Gotham
-transparencyInput.TextSize = 14
-transparencyInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-transparencyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-transparencyInput.Text = ""
-Instance.new("UICorner", transparencyInput).CornerRadius = UDim.new(0, 5)
-
-
-local backgroundImage = Instance.new("ImageLabel", MainFrame)
-backgroundImage.Size = UDim2.new(1, 0, 1, 0)
-backgroundImage.Position = UDim2.new(0, 0, 0, 0)
-backgroundImage.ZIndex = -10
-backgroundImage.BackgroundTransparency = 1
-backgroundImage.ImageTransparency = 0.5
-backgroundImage.Visible = false
-
-
-
-
-
-
-
-
-
-ConfigBtn.MouseButton1Click:Connect(function()
-	ConfigFrame.Visible = not ConfigFrame.Visible
-end)
-
-bgInput.FocusLost:Connect(function()
-	local id = tonumber(bgInput.Text)
-	if id then
-		backgroundImage.Image = "rbxassetid://" .. id
-		backgroundImage.Visible = true
-		userConfig.backgroundId = id
-		saveConfig()
-	end
-end)
-
-transparencyInput.FocusLost:Connect(function()
-	local val = tonumber(transparencyInput.Text)
-	if val and val >= 0 and val <= 0.9 then
-		local elementsToAffect = {
-			MainFrame,
-			ResultsFrame,
-			ConfigFrame,
-			RecentsFrame,
-			RecentsScroll
-		}
-
-		for _, gui in ipairs(elementsToAffect) do
-			gui.BackgroundTransparency = val
-		end
-
-		userConfig.transparency = val
-		saveConfig()
-	end
-end)
-
-
-
-
-
---scripts ScriptBlox
-local function fetchRawScript(url)
-	local response = request({
-		Url = url,
-		Method = "GET",
-		Headers = {["Content-Type"] = "application/json"}
-	})
-	if response and response.Body then
-		local success, data = pcall(function() return HttpService:JSONDecode(response.Body) end)
-		if success then return data else return response.Body end
+	local ok, r = pcall(function()
+		return request({Url=url, Method="GET", Headers={["Content-Type"]="application/json"}})
+	end)
+	if ok and r and r.Body then
+		local s, d = pcall(function() return HttpService:JSONDecode(r.Body) end)
+		if s then return d else return r.Body end
 	end
 	return nil
 end
-
-
---Traductor
-local function traducirATextoIngles(texto)
-	local url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=" .. HttpService:UrlEncode(texto)
-
-	local response = request({
-		Url = url,
-		Method = "GET",
-		Headers = {
-			["Content-Type"] = "application/json"
-		}
-	})
-
-	if response and response.Body then
-		local success, result = pcall(function()
-			return HttpService:JSONDecode(response.Body)
-		end)
-
-		if success and typeof(result) == "table" and result[1] and result[1][1] and result[1][1][1] then
-			return result[1][1][1]
-		end
-	end
-
-	return texto -- Si falla, devuelve el texto original
+local function getCode(raw)
+	if type(raw)=="table" and type(raw.result)=="string" then return raw.result end
+	if type(raw)=="string" then return raw end
+	return nil
+end
+local function runCode(code)
+	if not code then return end
+	local fn, err = (loadstring or load)(code)
+	if fn then local ok,e=pcall(fn); if not ok then warn("❌ exec:",e) end
+	else warn("❌ compile:",err) end
 end
 
+-- ============================================================
+-- ÍTEM NORMAL (resultados / historial)
+-- ============================================================
+local function makeScriptItem(parent, sd, zBase, isHistory, onDelete)
+	local JmodsScriptItem = Instance.new("Frame", parent)
+	JmodsScriptItem.Name                   = "JmodsScriptItem"
+	JmodsScriptItem.Size                   = UDim2.new(1,-8,0,80)
+	JmodsScriptItem.BackgroundColor3       = Color3.fromRGB(50,50,50)
+	JmodsScriptItem.BackgroundTransparency = math.min(1, currentTransparency + 0.1)
+	JmodsScriptItem.BorderSizePixel        = 0
+	JmodsScriptItem.ZIndex                 = zBase
+	Instance.new("UICorner", JmodsScriptItem).CornerRadius = UDim.new(0,8)
 
+	local JmodsItemTitle = Instance.new("TextLabel", JmodsScriptItem)
+	JmodsItemTitle.Name="JmodsItemTitle"; JmodsItemTitle.Text="🎮 "..(sd.title or "Sin título")
+	JmodsItemTitle.Size=UDim2.new(1,isHistory and -52 or -20,0,26); JmodsItemTitle.Position=UDim2.new(0,10,0,6)
+	JmodsItemTitle.TextSize=15; JmodsItemTitle.Font=Enum.Font.GothamMedium
+	JmodsItemTitle.TextColor3=Color3.new(1,1,1); JmodsItemTitle.BackgroundTransparency=1
+	JmodsItemTitle.TextXAlignment=Enum.TextXAlignment.Left
+	JmodsItemTitle.TextTruncate=Enum.TextTruncate.AtEnd; JmodsItemTitle.ZIndex=zBase+1
 
+	local JmodsItemGame = Instance.new("TextLabel", JmodsScriptItem)
+	JmodsItemGame.Name="JmodsItemGame"; JmodsItemGame.Text="📜 "..(sd.game and sd.game.name or "Universal")
+	JmodsItemGame.Size=UDim2.new(0.65,0,0,20); JmodsItemGame.Position=UDim2.new(0,10,0,34)
+	JmodsItemGame.TextSize=13; JmodsItemGame.Font=Enum.Font.Gotham
+	JmodsItemGame.TextColor3=Color3.fromRGB(200,200,200); JmodsItemGame.BackgroundTransparency=1
+	JmodsItemGame.TextXAlignment=Enum.TextXAlignment.Left
+	JmodsItemGame.TextTruncate=Enum.TextTruncate.AtEnd; JmodsItemGame.ZIndex=zBase+1
 
+	local JmodsItemKey = Instance.new("TextLabel", JmodsScriptItem)
+	JmodsItemKey.Name="JmodsItemKey"
+	JmodsItemKey.Size=UDim2.new(0,130,0,20); JmodsItemKey.Position=UDim2.new(1,-138,0,34)
+	JmodsItemKey.BackgroundTransparency=1; JmodsItemKey.TextXAlignment=Enum.TextXAlignment.Right
+	JmodsItemKey.Font=Enum.Font.Gotham; JmodsItemKey.TextSize=12; JmodsItemKey.ZIndex=zBase+1
+	if sd.key then JmodsItemKey.Text="🔐 Requiere key"; JmodsItemKey.TextColor3=Color3.fromRGB(255,120,120)
+	else JmodsItemKey.Text="🔓 Sin key"; JmodsItemKey.TextColor3=Color3.fromRGB(120,255,120) end
 
-local function showScripts(scripts, isHistory)
-	for _, child in ipairs(ResultsFrame:GetChildren()) do
-		if child:IsA("Frame") then child:Destroy() end
+	local JmodsItemViews = Instance.new("TextLabel", JmodsScriptItem)
+	JmodsItemViews.Name="JmodsItemViews"; JmodsItemViews.Text="👁️ "..tostring(sd.views or 0).." vistas"
+	JmodsItemViews.Size=UDim2.new(1,-20,0,20); JmodsItemViews.Position=UDim2.new(0,10,0,54)
+	JmodsItemViews.Font=Enum.Font.Gotham; JmodsItemViews.TextSize=13
+	JmodsItemViews.TextColor3=Color3.fromRGB(0,220,100); JmodsItemViews.BackgroundTransparency=1
+	JmodsItemViews.TextXAlignment=Enum.TextXAlignment.Left; JmodsItemViews.ZIndex=zBase+1
+
+	local JmodsItemExecBtn = Instance.new("TextButton", JmodsScriptItem)
+	JmodsItemExecBtn.Name="JmodsItemExecBtn"
+	JmodsItemExecBtn.Size=UDim2.new(0,100,0,25); JmodsItemExecBtn.Position=UDim2.new(1,-210,1,-28)
+	JmodsItemExecBtn.Text="Ejecutar"; JmodsItemExecBtn.Font=Enum.Font.Gotham; JmodsItemExecBtn.TextSize=14
+	JmodsItemExecBtn.BackgroundColor3=Color3.fromRGB(40,120,180); JmodsItemExecBtn.TextColor3=Color3.new(1,1,1)
+	JmodsItemExecBtn.ZIndex=zBase+1; Instance.new("UICorner",JmodsItemExecBtn).CornerRadius=UDim.new(0,5)
+
+	local JmodsItemCopyBtn = Instance.new("TextButton", JmodsScriptItem)
+	JmodsItemCopyBtn.Name="JmodsItemCopyBtn"
+	JmodsItemCopyBtn.Size=UDim2.new(0,100,0,25); JmodsItemCopyBtn.Position=UDim2.new(1,-105,1,-28)
+	JmodsItemCopyBtn.Text="Copiar"; JmodsItemCopyBtn.Font=Enum.Font.Gotham; JmodsItemCopyBtn.TextSize=14
+	JmodsItemCopyBtn.BackgroundColor3=Color3.fromRGB(80,80,80); JmodsItemCopyBtn.TextColor3=Color3.new(1,1,1)
+	JmodsItemCopyBtn.ZIndex=zBase+1; Instance.new("UICorner",JmodsItemCopyBtn).CornerRadius=UDim.new(0,5)
+
+	if isHistory and onDelete then
+		local JmodsItemDelBtn = Instance.new("TextButton", JmodsScriptItem)
+		JmodsItemDelBtn.Name="JmodsItemDelBtn"
+		JmodsItemDelBtn.Size=UDim2.new(0,30,0,30); JmodsItemDelBtn.Position=UDim2.new(1,-40,0,6)
+		JmodsItemDelBtn.Text="X"; JmodsItemDelBtn.Font=Enum.Font.GothamBold; JmodsItemDelBtn.TextSize=16
+		JmodsItemDelBtn.BackgroundColor3=Color3.fromRGB(150,60,60); JmodsItemDelBtn.TextColor3=Color3.new(1,1,1)
+		JmodsItemDelBtn.ZIndex=zBase+1; Instance.new("UICorner",JmodsItemDelBtn).CornerRadius=UDim.new(0,5)
+		JmodsItemDelBtn.MouseButton1Click:Connect(onDelete)
 	end
 
-	for _, script in ipairs(scripts) do
-		local Item = Instance.new("Frame", ResultsFrame)
-		Item.Size = UDim2.new(1, -10, 0, 80)
-		Item.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-		Item.BackgroundTransparency = 0.2
-		Instance.new("UICorner", Item).CornerRadius = UDim.new(0, 8)
-
-		local nameLabel = Instance.new("TextLabel", Item)
-		nameLabel.Text = "🎮 " .. script.title
-		nameLabel.Size = UDim2.new(1, isHistory and -50 or -20, 0, 26)
-		nameLabel.Position = UDim2.new(0, 10, 0, 6)
-		nameLabel.TextSize = 16
-		nameLabel.Font = Enum.Font.GothamMedium
-		nameLabel.TextColor3 = Color3.new(1, 1, 1)
-		nameLabel.BackgroundTransparency = 1
-		nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-		if isHistory then
-			local deleteBtn = Instance.new("TextButton", Item)
-			deleteBtn.Size = UDim2.new(0, 30, 0, 30)
-			deleteBtn.Position = UDim2.new(1, -40, 0, 6)
-			deleteBtn.Text = "X"
-			deleteBtn.Font = Enum.Font.GothamBold
-			deleteBtn.TextSize = 16
-			deleteBtn.BackgroundColor3 = Color3.fromRGB(150, 60, 60)
-			deleteBtn.TextColor3 = Color3.new(1, 1, 1)
-			Instance.new("UICorner", deleteBtn).CornerRadius = UDim.new(0, 5)
-
-			deleteBtn.MouseButton1Click:Connect(function()
-				for i, s in ipairs(history) do
-					if s.slug == script.slug then
-						table.remove(history, i)
-						break
-					end
-				end
-				saveHistory()
-				showScripts(history, true)
-			end)
+	JmodsItemExecBtn.MouseButton1Click:Connect(function()
+		runCode(getCode(fetchRawScript("https://scriptblox.com/api/script/raw/"..sd.slug)))
+		local exists=false
+		for i,s in ipairs(history) do
+			if s.slug==sd.slug then history[i].views=sd.views or s.views; exists=true; break end
 		end
-
-		local gameLabel = Instance.new("TextLabel", Item)
-		gameLabel.Text = "📜 " .. (script.game and script.game.name or "Universal")gameLabel.Text = "📜 " .. (script.game and script.game.name or "Universal")
-
-
-
-
-
-local keyLabel = Instance.new("TextLabel", Item)
-keyLabel.Size = UDim2.new(0, 120, 0, 20)
-keyLabel.Position = UDim2.new(1, -130, 0, 34)
-keyLabel.BackgroundTransparency = 1
-keyLabel.TextXAlignment = Enum.TextXAlignment.Right
-keyLabel.Font = Enum.Font.Gotham
-keyLabel.TextSize = 14
-keyLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-
-if script.key == true then
-	keyLabel.Text = "🔐 Requiere key"
-	keyLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
-elseif script.key == false or script.key == nil then
-	keyLabel.Text = "🔓 Sin key"
-	keyLabel.TextColor3 = Color3.fromRGB(120, 255, 120)
+		if not exists then
+			table.insert(history,1,{title=sd.title,slug=sd.slug,game=sd.game,views=sd.views or 0,key=sd.key})
+		end
+		saveHistory()
+	end)
+	JmodsItemCopyBtn.MouseButton1Click:Connect(function()
+		local code=getCode(fetchRawScript("https://scriptblox.com/api/script/raw/"..sd.slug))
+		if code and setclipboard then setclipboard(code) end
+	end)
+	return JmodsScriptItem
 end
 
-keyLabel.Parent = Item
+-- ============================================================
+-- ÍTEM COMPACTO — trending
+-- ============================================================
+local function makeTrendItem(parent, sd, zBase)
+	local JmodsTrendItem = Instance.new("Frame", parent)
+	JmodsTrendItem.Name                   = "JmodsTrendItem"
+	JmodsTrendItem.Size                   = UDim2.new(1,-4,0,72)
+	JmodsTrendItem.BackgroundColor3       = Color3.fromRGB(30,30,30)
+	JmodsTrendItem.BackgroundTransparency = 0.15
+	JmodsTrendItem.BorderSizePixel        = 0
+	JmodsTrendItem.ZIndex                 = zBase
+	Instance.new("UICorner", JmodsTrendItem).CornerRadius = UDim.new(0,8)
 
+	local JmodsTrendItemTitle = Instance.new("TextLabel", JmodsTrendItem)
+	JmodsTrendItemTitle.Name="JmodsTrendItemTitle"; JmodsTrendItemTitle.Text=(sd.title or "Sin título")
+	JmodsTrendItemTitle.Size=UDim2.new(1,-10,0,20); JmodsTrendItemTitle.Position=UDim2.new(0,8,0,5)
+	JmodsTrendItemTitle.TextSize=13; JmodsTrendItemTitle.Font=Enum.Font.GothamBold
+	JmodsTrendItemTitle.TextColor3=Color3.new(1,1,1); JmodsTrendItemTitle.BackgroundTransparency=1
+	JmodsTrendItemTitle.TextXAlignment=Enum.TextXAlignment.Left
+	JmodsTrendItemTitle.TextTruncate=Enum.TextTruncate.AtEnd; JmodsTrendItemTitle.ZIndex=zBase+1
 
+	local JmodsTrendItemInfo = Instance.new("TextLabel", JmodsTrendItem)
+	JmodsTrendItemInfo.Name="JmodsTrendItemInfo"
+	JmodsTrendItemInfo.Text=(sd.key and "🔐" or "🔓").."  "..(sd.game and sd.game.name or "Universal")
+	JmodsTrendItemInfo.Size=UDim2.new(1,-10,0,16); JmodsTrendItemInfo.Position=UDim2.new(0,8,0,26)
+	JmodsTrendItemInfo.TextSize=11; JmodsTrendItemInfo.Font=Enum.Font.Gotham
+	JmodsTrendItemInfo.TextColor3=Color3.fromRGB(180,180,180); JmodsTrendItemInfo.BackgroundTransparency=1
+	JmodsTrendItemInfo.TextXAlignment=Enum.TextXAlignment.Left
+	JmodsTrendItemInfo.TextTruncate=Enum.TextTruncate.AtEnd; JmodsTrendItemInfo.ZIndex=zBase+1
 
+	local JmodsTrendExecBtn = Instance.new("TextButton", JmodsTrendItem)
+	JmodsTrendExecBtn.Name="JmodsTrendExecBtn"
+	JmodsTrendExecBtn.Size=UDim2.new(0.5,-6,0,22); JmodsTrendExecBtn.Position=UDim2.new(0,4,1,-26)
+	JmodsTrendExecBtn.Text="▶ Ejecutar"; JmodsTrendExecBtn.Font=Enum.Font.GothamBold; JmodsTrendExecBtn.TextSize=11
+	JmodsTrendExecBtn.BackgroundColor3=Color3.fromRGB(40,120,180); JmodsTrendExecBtn.TextColor3=Color3.new(1,1,1)
+	JmodsTrendExecBtn.ZIndex=zBase+1; Instance.new("UICorner",JmodsTrendExecBtn).CornerRadius=UDim.new(0,5)
 
+	local JmodsTrendCopyBtn = Instance.new("TextButton", JmodsTrendItem)
+	JmodsTrendCopyBtn.Name="JmodsTrendCopyBtn"
+	JmodsTrendCopyBtn.Size=UDim2.new(0.5,-6,0,22); JmodsTrendCopyBtn.Position=UDim2.new(0.5,2,1,-26)
+	JmodsTrendCopyBtn.Text="📋 Copiar"; JmodsTrendCopyBtn.Font=Enum.Font.GothamBold; JmodsTrendCopyBtn.TextSize=11
+	JmodsTrendCopyBtn.BackgroundColor3=Color3.fromRGB(70,70,70); JmodsTrendCopyBtn.TextColor3=Color3.new(1,1,1)
+	JmodsTrendCopyBtn.ZIndex=zBase+1; Instance.new("UICorner",JmodsTrendCopyBtn).CornerRadius=UDim.new(0,5)
 
-
-
-
-
-		gameLabel.Size = UDim2.new(1, -20, 0, 20)
-		gameLabel.Position = UDim2.new(0, 10, 0, 34)
-		gameLabel.TextSize = 14
-		gameLabel.Font = Enum.Font.Gotham
-		gameLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-		gameLabel.BackgroundTransparency = 1
-		gameLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-
-local viewsLabel = Instance.new("TextLabel", Item)
-viewsLabel.Text = "👁️ " .. tostring(script.views or 0) .. " Ejecuciones/vistas"
-viewsLabel.Size = UDim2.new(1, -20, 0, 20)
-viewsLabel.Position = UDim2.new(0, 10, 0, 54)
-viewsLabel.Font = Enum.Font.Gotham
-viewsLabel.TextSize = 14
-viewsLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-viewsLabel.BackgroundTransparency = 1
-viewsLabel.TextXAlignment = Enum.TextXAlignment.Left
-viewsLabel.ZIndex = 1
-
-
-
-
-
-		local executeBtn = Instance.new("TextButton", Item)
-		executeBtn.Size = UDim2.new(0, 100, 0, 25)
-		executeBtn.Position = UDim2.new(1, -210, 1, -28)
-		executeBtn.Text = "Ejecutar"
-		executeBtn.Font = Enum.Font.Gotham
-		executeBtn.TextSize = 14
-		executeBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 180)
-		executeBtn.TextColor3 = Color3.new(1, 1, 1)
-		Instance.new("UICorner", executeBtn).CornerRadius = UDim.new(0, 5)
-
-		local copyBtn = Instance.new("TextButton", Item)
-		copyBtn.Size = UDim2.new(0, 100, 0, 25)
-		copyBtn.Position = UDim2.new(1, -105, 1, -28)
-		copyBtn.Text = "Copiar"
-		copyBtn.Font = Enum.Font.Gotham
-		copyBtn.TextSize = 14
-		copyBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-		copyBtn.TextColor3 = Color3.new(1, 1, 1)
-		Instance.new("UICorner", copyBtn).CornerRadius = UDim.new(0, 5)
-
-		executeBtn.MouseButton1Click:Connect(function()
-			local raw = fetchRawScript("https://scriptblox.com/api/script/raw/" .. script.slug)
-			if raw then
-				local code = (type(raw) == "table" and raw.result) or raw
-				local func, err = loadstring and loadstring(code) or load(code)
-if func then
-	pcall(func)
-
-	local exists = false
-	for i, s in ipairs(history) do
-		if s.slug == script.slug then
-			-- Actualiza vistas reales si ejecutaste el mismo script otra vez
-			history[i].views = script.views or s.views
-			exists = true
-			break
+	JmodsTrendExecBtn.MouseButton1Click:Connect(function()
+		runCode(getCode(fetchRawScript("https://scriptblox.com/api/script/raw/"..sd.slug)))
+		local exists=false
+		for i,s in ipairs(history) do
+			if s.slug==sd.slug then history[i].views=sd.views or s.views; exists=true; break end
 		end
-	end
-
-	if not exists then
-table.insert(history, 1, {
-	title = script.title,
-	slug = script.slug,
-	game = script.game,
-	views = script.views or 0,
-	key = script.key
-})
-
-	end
-
-	saveHistory()
-
-				else
-					warn("❌ Error al compilar:", err)
-				end
-			end
-		end)
-
-		copyBtn.MouseButton1Click:Connect(function()
-			local raw = fetchRawScript("https://scriptblox.com/api/script/raw/" .. script.slug)
-			local code = (type(raw) == "table" and raw.result) or raw
-			if code and setclipboard then
-				setclipboard(code)
-			end
-		end)
-	end
-
-	ResultsFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y + 10)
+		if not exists then
+			table.insert(history,1,{title=sd.title,slug=sd.slug,game=sd.game,views=sd.views or 0,key=sd.key})
+		end
+		saveHistory()
+	end)
+	JmodsTrendCopyBtn.MouseButton1Click:Connect(function()
+		local code=getCode(fetchRawScript("https://scriptblox.com/api/script/raw/"..sd.slug))
+		if code and setclipboard then setclipboard(code) end
+	end)
+	return JmodsTrendItem
 end
 
----Cooldown xd
-
-local searchTimestamps = {}
-
-local function canSearch()
-	local currentTime = tick()
-
-	-- Elimina tm
-	for i = #searchTimestamps, 1, -1 do
-		if currentTime - searchTimestamps[i] > 5 then
-			table.remove(searchTimestamps, i)
-		end
+-- ============================================================
+-- MOSTRAR RESULTADOS
+-- ============================================================
+local function showScripts(scripts, isHist)
+	for _, c in ipairs(JmodsResultsScroll:GetChildren()) do
+		if c:IsA("Frame") or c:IsA("TextLabel") then c:Destroy() end
 	end
-
-	if #searchTimestamps >= 5 then
-		return false
-	end
-
-	table.insert(searchTimestamps, currentTime)
-	return true
-end
-
-
-
-
--- buscar scripts
-local function searchScripts(query)
-	if not canSearch() then
-		warn("⚠️ Límite de búsqueda alcanzado. Espera 5 segundos.")
+	if not scripts or #scripts==0 then
+		local JmodsEmptyLabel = Instance.new("TextLabel",JmodsResultsScroll)
+		JmodsEmptyLabel.Name="JmodsEmptyLabel"; JmodsEmptyLabel.Size=UDim2.new(1,0,0,40)
+		JmodsEmptyLabel.Text=isHist and "📭 Sin historial aún" or "❌ Sin resultados"
+		JmodsEmptyLabel.Font=Enum.Font.GothamBold; JmodsEmptyLabel.TextSize=15
+		JmodsEmptyLabel.TextColor3=Color3.fromRGB(200,200,200); JmodsEmptyLabel.BackgroundTransparency=1
 		return
 	end
-
-	if query == "" or not query then
-		showScripts(history, true)
-		return
+	for _, sd in ipairs(scripts) do
+		makeScriptItem(JmodsResultsScroll, sd, 2, isHist, function()
+			for i,s in ipairs(history) do
+				if s.slug==sd.slug then table.remove(history,i); break end
+			end
+			saveHistory(); showScripts(history,true)
+		end)
 	end
+	JmodsResultsScroll.CanvasSize = UDim2.new(0,0,0,_resultsLayout.AbsoluteContentSize.Y+10)
+end
 
-	-- Resto de tu código sin cambios
-	for _, c in ipairs(ResultsFrame:GetChildren()) do
-		if c:IsA("Frame") or c:IsA("TextLabel") then
-			c:Destroy()
-		end
+-- ============================================================
+-- CARGAR TRENDING
+-- ============================================================
+local _cachedTrend = nil
+local function showTrending()
+	for _, c in ipairs(JmodsTrendScroll:GetChildren()) do
+		if c:IsA("Frame") or c:IsA("TextLabel") then c:Destroy() end
 	end
-
-	local loading = Instance.new("TextLabel", ResultsFrame)
-	loading.Size = UDim2.new(1, 0, 0, 40)
-	loading.Text = "🔄buscando por favor espera..."
-	loading.TextColor3 = Color3.new(1, 1, 1)
-	loading.BackgroundTransparency = 1
-
-	task.wait(0.05)
-
+	local JmodsTrendLoadLabel = Instance.new("TextLabel",JmodsTrendScroll)
+	JmodsTrendLoadLabel.Name="JmodsTrendLoadLabel"; JmodsTrendLoadLabel.Size=UDim2.new(1,0,0,36)
+	JmodsTrendLoadLabel.Text="⏳ Cargando trending..."
+	JmodsTrendLoadLabel.Font=Enum.Font.GothamBold; JmodsTrendLoadLabel.TextSize=14
+	JmodsTrendLoadLabel.TextColor3=Color3.fromRGB(220,220,220); JmodsTrendLoadLabel.BackgroundTransparency=1
+	JmodsTrendLoadLabel.ZIndex=62
 	task.spawn(function()
- 
-
-		local translatedQuery = traducirATextoIngles(query)
-
-
-local allScripts = {}
-local maxPages = 4
-
-for page = 1, maxPages do
-	local url = "https://scriptblox.com/api/script/search?q=" .. HttpService:UrlEncode(translatedQuery) .. "&page=" .. page
-	local data = fetchRawScript(url)
-
-	if data and data.result and data.result.scripts and #data.result.scripts > 0 then
-		for _, script in ipairs(data.result.scripts) do
-			table.insert(allScripts, script)
+		local scripts = _cachedTrend
+		if not scripts then
+			local ok, r = pcall(function()
+				return request({Url="https://scriptblox.com/api/script/trending",Method="GET"})
+			end)
+			if ok and r and r.Body then
+				local s,d=pcall(function() return HttpService:JSONDecode(r.Body) end)
+				if s and d and d.result and d.result.scripts then
+					scripts=d.result.scripts; _cachedTrend=scripts
+				end
+			end
 		end
-	else
-		break -- no más resultados
-	end
-end
-
-
-loading:Destroy()
-
-if #allScripts > 0 then
-	showScripts(allScripts, false)
-	saveToFirebase(query, allScripts)
-else
-	local fallback = loadFromFirebase(query)
-	if fallback then
-		showScripts(fallback, false)
-	else
-		local fail = Instance.new("TextLabel", ResultsFrame)
-		fail.Size = UDim2.new(1, 0, 0, 40)
-		fail.Text = "❌ Sin resultados ni respaldo local."
-		fail.TextColor3 = Color3.new(1, 1, 1)
-		fail.BackgroundTransparency = 1
-	end
-end
-
+		pcall(function() JmodsTrendLoadLabel:Destroy() end)
+		if not scripts or #scripts==0 then
+			local JmodsTrendFailLabel = Instance.new("TextLabel",JmodsTrendScroll)
+			JmodsTrendFailLabel.Name="JmodsTrendFailLabel"; JmodsTrendFailLabel.Size=UDim2.new(1,0,0,36)
+			JmodsTrendFailLabel.Text="❌ No se pudo cargar"
+			JmodsTrendFailLabel.Font=Enum.Font.GothamBold; JmodsTrendFailLabel.TextSize=13
+			JmodsTrendFailLabel.TextColor3=Color3.fromRGB(255,100,100)
+			JmodsTrendFailLabel.BackgroundTransparency=1; JmodsTrendFailLabel.ZIndex=62; return
+		end
+		for i=1,math.min(40,#scripts) do makeTrendItem(JmodsTrendScroll,scripts[i],62) end
+		JmodsTrendScroll.CanvasSize=UDim2.new(0,0,0,_trendLayout.AbsoluteContentSize.Y+10)
 	end)
 end
 
-
-
-
-
--- Botones
-SearchButton.MouseButton1Click:Connect(function()
-	searchScripts(SearchBox.Text)
-end)
-
-SearchBox.FocusLost:Connect(function(enterPressed)
-	if enterPressed then
-		searchScripts(SearchBox.Text)
+-- ============================================================
+-- TRADUCTOR
+-- ============================================================
+local function translateToEnglish(text)
+	local ok, r = pcall(function()
+		return request({
+			Url="https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q="
+				..HttpService:UrlEncode(text), Method="GET"
+		})
+	end)
+	if ok and r and r.Body then
+		local s,d=pcall(function() return HttpService:JSONDecode(r.Body) end)
+		if s and d and d[1] and d[1][1] and d[1][1][1] then return d[1][1][1] end
 	end
-end)
+	return text
+end
 
-SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
-	if SearchBox.Text == "" then
-		for _, c in ipairs(ResultsFrame:GetChildren()) do
-			if c:IsA("Frame") or c:IsA("TextLabel") then
-				c:Destroy()
+-- ============================================================
+-- COOLDOWN BÚSQUEDA
+-- ============================================================
+local _searchTs = {}
+local function canSearch()
+	local now=tick()
+	for i=#_searchTs,1,-1 do if now-_searchTs[i]>5 then table.remove(_searchTs,i) end end
+	if #_searchTs>=5 then return false end
+	table.insert(_searchTs,now); return true
+end
+
+-- ============================================================
+-- BUSCAR
+-- ============================================================
+local function searchScripts(query)
+	query=(query or ""):match("^%s*(.-)%s*$")
+	if query=="" then showScripts(history,true); return end
+	if not canSearch() then return end
+	for _,c in ipairs(JmodsResultsScroll:GetChildren()) do
+		if c:IsA("Frame") or c:IsA("TextLabel") then c:Destroy() end
+	end
+	local JmodsSearchingLabel = Instance.new("TextLabel",JmodsResultsScroll)
+	JmodsSearchingLabel.Name="JmodsSearchingLabel"; JmodsSearchingLabel.Size=UDim2.new(1,0,0,40)
+	JmodsSearchingLabel.Text="🔄 buscando, por favor espera..."
+	JmodsSearchingLabel.Font=Enum.Font.Gotham; JmodsSearchingLabel.TextSize=16
+	JmodsSearchingLabel.TextColor3=Color3.fromRGB(255,255,255); JmodsSearchingLabel.BackgroundTransparency=1
+	task.spawn(function()
+		local tq=translateToEnglish(query)
+		local all={}
+		for page=1,4 do
+			local url="https://scriptblox.com/api/script/search?q="..HttpService:UrlEncode(tq).."&page="..page
+			local d=fetchRawScript(url)
+			if d and d.result and d.result.scripts and #d.result.scripts>0 then
+				for _,s in ipairs(d.result.scripts) do table.insert(all,s) end
+			else break end
+		end
+		pcall(function() JmodsSearchingLabel:Destroy() end)
+		if #all>0 then
+			showScripts(all,false); task.spawn(saveToFirebase,query,all)
+		else
+			local fb=loadFromFirebase(query)
+			if fb then showScripts(fb,false)
+			else
+				local JmodsNoResults = Instance.new("TextLabel",JmodsResultsScroll)
+				JmodsNoResults.Name="JmodsNoResults"; JmodsNoResults.Size=UDim2.new(1,0,0,40)
+				JmodsNoResults.Text="❌ Sin resultados."
+				JmodsNoResults.TextColor3=Color3.new(1,1,1); JmodsNoResults.BackgroundTransparency=1
 			end
 		end
-		showScripts(history, true)
-	end
-end)
+	end)
+end
 
-local minimized = false
-local restoreButton
-
-MinBtn.MouseButton1Click:Connect(function()
-	minimized = not minimized
-
-	if minimized then
-		MainFrame.Visible = false
-
-		restoreButton = Instance.new("TextButton")
-		restoreButton.Name = "RestoreBtn"
-		restoreButton.Text = "Jmods🔍"
-		restoreButton.Size = UDim2.new(0, 120, 0, 35)
-		restoreButton.Position = UDim2.new(0, 20, 0, 20)
-		restoreButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-		restoreButton.TextColor3 = Color3.new(1, 1, 1)
-		restoreButton.Font = Enum.Font.GothamBold
-		restoreButton.TextSize = 16
-		restoreButton.Parent = ScreenGui
-		Instance.new("UICorner", restoreButton).CornerRadius = UDim.new(0, 8)
-
-		makeDraggable(restoreButton, restoreButton)
-
-		restoreButton.MouseButton1Click:Connect(function()
-			minimized = false
-			MainFrame.Visible = true
-			if restoreButton then
-				restoreButton:Destroy()
-				restoreButton = nil
+-- ============================================================
+-- NOTIFICACIONES
+-- ============================================================
+local _notifQ={}; local _notifActive=false
+local function showNotification(title, message, link)
+	table.insert(_notifQ,{title=title,message=message,link=link})
+	if _notifActive then return end
+	_notifActive=true
+	task.spawn(function()
+		while #_notifQ>0 do
+			local data=table.remove(_notifQ,1)
+			local nW=isMobile and 210 or 300
+			local nH=data.link and (isMobile and 82 or 100) or (isMobile and 58 or 72)
+			local JmodsNotifFrame=Instance.new("Frame",JmodsGui)
+			JmodsNotifFrame.Name="JmodsNotifFrame"
+			JmodsNotifFrame.Size=UDim2.new(0,nW,0,nH); JmodsNotifFrame.Position=UDim2.new(1,10,0,20)
+			JmodsNotifFrame.BackgroundColor3=Color3.fromRGB(25,25,25)
+			JmodsNotifFrame.BackgroundTransparency=0.2; JmodsNotifFrame.BorderSizePixel=0; JmodsNotifFrame.ZIndex=200
+			Instance.new("UICorner",JmodsNotifFrame).CornerRadius=UDim.new(0,12)
+			local _ng=Instance.new("UIGradient",JmodsNotifFrame)
+			_ng.Color=ColorSequence.new{
+				ColorSequenceKeypoint.new(0,Color3.fromRGB(60,120,255)),
+				ColorSequenceKeypoint.new(1,Color3.fromRGB(255,60,90))
+			}; _ng.Rotation=45
+			local JmodsNotifTitle=Instance.new("TextLabel",JmodsNotifFrame)
+			JmodsNotifTitle.Name="JmodsNotifTitle"
+			JmodsNotifTitle.Size=UDim2.new(1,-20,0,30); JmodsNotifTitle.Position=UDim2.new(0,10,0,5)
+			JmodsNotifTitle.Text=data.title; JmodsNotifTitle.Font=Enum.Font.FredokaOne
+			JmodsNotifTitle.TextSize=isMobile and 16 or 20; JmodsNotifTitle.TextColor3=Color3.fromRGB(255,255,255)
+			JmodsNotifTitle.BackgroundTransparency=1; JmodsNotifTitle.TextXAlignment=Enum.TextXAlignment.Left; JmodsNotifTitle.ZIndex=201
+			local JmodsNotifMsg=Instance.new("TextLabel",JmodsNotifFrame)
+			JmodsNotifMsg.Name="JmodsNotifMsg"
+			JmodsNotifMsg.Size=UDim2.new(1,-20,0,26); JmodsNotifMsg.Position=UDim2.new(0,10,0,33)
+			JmodsNotifMsg.Text=data.message; JmodsNotifMsg.Font=Enum.Font.Gotham
+			JmodsNotifMsg.TextSize=isMobile and 12 or 15; JmodsNotifMsg.TextColor3=Color3.fromRGB(220,220,220)
+			JmodsNotifMsg.BackgroundTransparency=1; JmodsNotifMsg.TextXAlignment=Enum.TextXAlignment.Left; JmodsNotifMsg.ZIndex=201
+			if data.link then
+				local JmodsNotifLink=Instance.new("TextButton",JmodsNotifFrame)
+				JmodsNotifLink.Name="JmodsNotifLink"
+				JmodsNotifLink.Size=UDim2.new(1,-20,0,24); JmodsNotifLink.Position=UDim2.new(0,10,0,nH-30)
+				JmodsNotifLink.Text="▶ YouTube"; JmodsNotifLink.Font=Enum.Font.GothamBold
+				JmodsNotifLink.TextSize=isMobile and 11 or 13
+				JmodsNotifLink.BackgroundTransparency=1; JmodsNotifLink.TextColor3=Color3.fromRGB(0,200,255); JmodsNotifLink.ZIndex=201
+				Instance.new("UICorner",JmodsNotifLink).CornerRadius=UDim.new(0,6)
+				JmodsNotifLink.MouseButton1Click:Connect(function()
+					if setclipboard then setclipboard(data.link) end
+				end)
 			end
+			tw(JmodsNotifFrame,{Position=UDim2.new(1,-(nW+10),0,20)},0.4,Enum.EasingStyle.Back)
+			task.wait(5)
+			for _=1,10 do
+				pcall(function()
+					JmodsNotifFrame.BackgroundTransparency=math.min(1,JmodsNotifFrame.BackgroundTransparency+0.08)
+				end)
+				task.wait(0.05)
+			end
+			pcall(function() JmodsNotifFrame:Destroy() end)
+			task.wait(0.3)
+		end
+		_notifActive=false
+	end)
+end
+
+-- ============================================================
+-- MINIMIZAR / RESTAURAR
+-- ============================================================
+local _minimized=false; local _restoreBtn=nil
+JmodsMinBtn.MouseButton1Click:Connect(function()
+	_minimized=not _minimized
+	if _minimized then
+		JmodsMainFrame.Visible=false; JmodsTrendPanel.Visible=false
+		_restoreBtn=Instance.new("TextButton",JmodsGui)
+		_restoreBtn.Name="JmodsRestoreBtn"; _restoreBtn.Text="Jmods🔍"
+		_restoreBtn.Size=UDim2.new(0,120,0,35); _restoreBtn.Position=UDim2.new(0,20,0,20)
+		_restoreBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
+		_restoreBtn.TextColor3=Color3.new(1,1,1); _restoreBtn.Font=Enum.Font.GothamBold; _restoreBtn.TextSize=16
+		Instance.new("UICorner",_restoreBtn).CornerRadius=UDim.new(0,8)
+		makeDraggable(_restoreBtn,_restoreBtn)
+		_restoreBtn.MouseButton1Click:Connect(function()
+			_minimized=false; JmodsMainFrame.Visible=true
+			_restoreBtn:Destroy(); _restoreBtn=nil
 		end)
 	else
-		MainFrame.Visible = true
-		if restoreButton then
-			restoreButton:Destroy()
-			restoreButton = nil
-		end
+		JmodsMainFrame.Visible=true
+		if _restoreBtn then _restoreBtn:Destroy(); _restoreBtn=nil end
 	end
 end)
 
+JmodsCloseBtn.MouseButton1Click:Connect(function() JmodsGui:Destroy() end)
 
-CloseBtn.MouseButton1Click:Connect(function()
-	ScreenGui:Destroy()
+-- ============================================================
+-- CONFIG
+-- ============================================================
+JmodsConfigBtn.MouseButton1Click:Connect(function()
+	JmodsConfigPanel.Visible=not JmodsConfigPanel.Visible
+end)
+JmodsBgIdInput.FocusLost:Connect(function()
+	local id=(JmodsBgIdInput.Text or ""):match("^%s*(.-)%s*$")
+	if id~="" then
+		JmodsBgImage.Image="rbxassetid://"..id; JmodsBgImage.Visible=true
+		userConfig.backgroundId=id; saveConfig()
+	else
+		JmodsBgImage.Visible=false; userConfig.backgroundId=""; saveConfig()
+	end
 end)
 
+-- ============================================================
+-- TRENDING
+-- ============================================================
+JmodsTrendBtn.MouseButton1Click:Connect(function()
+	JmodsTrendPanel.Visible=not JmodsTrendPanel.Visible
+	if JmodsTrendPanel.Visible then repositionTrending(); showTrending() end
+end)
 
--- Cargar gualdaos
-showScripts(history, true)
+-- ============================================================
+-- BÚSQUEDA
+-- ============================================================
+JmodsSearchBtn.MouseButton1Click:Connect(function() searchScripts(JmodsSearchBox.Text) end)
+JmodsSearchBox.FocusLost:Connect(function(enter) if enter then searchScripts(JmodsSearchBox.Text) end end)
+JmodsSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+	if JmodsSearchBox.Text=="" then showScripts(history,true) end
+end)
 
-
-
-
-
-
-
-
----solo la primera vez
-showNotification("Subscríbete: joao_mods", "Apóyame y mira más scripts", "https://youtube.com/@joao_mods0?si=Pv8NCVM5sT4Vr4F0")
-
-
+-- ============================================================
+-- SECUENCIA PRINCIPAL: INTRO → FADE-IN → CONFIG → HISTORIAL → NOTIF
+-- Un único task.spawn = orden garantizado, sin race conditions.
+-- ============================================================
 task.spawn(function()
-	while true do
-		task.wait(600)
-		showNotification("Recuerda", "Para mejores resultados busca en inglés")
-		task.wait(60)
 
-		showNotification("Recuerda", "No hagas tantas búsquedas tan rápido")
-	end
-end)
+	-- PASO 1: Intro completa (bloqueante)
+	runIntro()
 
-
-
-
-
-
-task.defer(function()
-	if userConfig.backgroundId and tostring(userConfig.backgroundId) ~= "" then
-		backgroundImage.Image = "rbxassetid://" .. tostring(userConfig.backgroundId)
-		backgroundImage.Visible = true
-	end
-
-	if userConfig.transparency then
-		local val = tonumber(userConfig.transparency)
-		local elementsToAffect = {
-			MainFrame,
-			ResultsFrame,
-			ConfigFrame,
-			RecentsFrame,
-			RecentsScroll
-		}
-
-		for _, gui in ipairs(elementsToAffect) do
-			gui.BackgroundTransparency = val
+	-- PASO 2: Mostrar MainFrame con fade-in
+	JmodsMainFrame.Visible                = true
+	JmodsMainFrame.BackgroundTransparency = 1
+	for _, v in ipairs(JmodsMainFrame:GetDescendants()) do
+		if v==JmodsConfigPanel or v:IsDescendantOf(JmodsConfigPanel) then continue end
+		if v:IsA("Frame") or v:IsA("TextLabel") or v:IsA("TextButton")
+		or v:IsA("ScrollingFrame") or v:IsA("ImageLabel") then
+			v.Visible = false
 		end
 	end
+	tw(JmodsMainFrame, {BackgroundTransparency=currentTransparency}, 1)
+	task.wait(0.3)
+	for _, v in ipairs(JmodsMainFrame:GetDescendants()) do
+		if v==JmodsConfigPanel or v:IsDescendantOf(JmodsConfigPanel) then continue end
+		if v:IsA("Frame") or v:IsA("TextLabel") or v:IsA("TextButton")
+		or v:IsA("ScrollingFrame") or v:IsA("ImageLabel") then
+			v.Visible = true
+			if v:IsA("Frame") then
+				v.BackgroundTransparency=1; tw(v,{BackgroundTransparency=currentTransparency},0.5)
+			elseif v:IsA("TextLabel") or v:IsA("TextButton") then
+				v.TextTransparency=1; tw(v,{TextTransparency=0},0.5)
+			elseif v:IsA("ImageLabel") then
+				v.ImageTransparency=1; tw(v,{ImageTransparency=0},0.5)
+			end
+		end
+	end
+
+	-- PASO 3: Restaurar config (imagen + transparencia + slider)
+	if userConfig.backgroundId and userConfig.backgroundId~="" then
+		JmodsBgImage.Image="rbxassetid://"..tostring(userConfig.backgroundId)
+		JmodsBgImage.Visible=true
+	end
+	repositionTrending()  -- ahora MainFrame tiene AbsoluteSize real
+	applyTransparency(currentTransparency)
+	local sliderRel = math.clamp(currentTransparency/0.9, 0, 1)
+	JmodsSliderFill.Size       = UDim2.new(sliderRel,0,1,0)
+	JmodsSliderHandle.Position = UDim2.new(sliderRel,0,0.5,0)
+	JmodsSliderLabel.Text      = "Transparencia: "..string.format("%.0f%%", currentTransparency*100)
+
+	-- PASO 4: Historial y notificaciones
+	showScripts(history, true)
+	showNotification("Subscríbete: joao_mods","Apóyame y mira más scripts",
+		"https://youtube.com/@joao_mods0?si=Pv8NCVM5sT4Vr4F0")
+	task.spawn(function()
+		while true do
+			task.wait(600)
+			showNotification("Recuerda","Para mejores resultados busca en inglés")
+			task.wait(60)
+			showNotification("Recuerda","No hagas tantas búsquedas tan rápido")
+		end
+	end)
 end)
+
+-- FIN DEL SCRIPT ✅
